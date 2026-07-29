@@ -74,3 +74,4 @@ supabase db reset
 - Add environment variables in the Vercel dashboard.
 - Make sure `NEXT_PUBLIC_APP_URL` points to your production domain.
 - Deploy the project from the GitHub repository.
+salam
