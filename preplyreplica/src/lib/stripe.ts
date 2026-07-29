@@ -42,36 +42,39 @@ export async function createBookingCheckoutSession({
   successUrl: string
   cancelUrl: string
 }) {
-  // Destination charge: the session is created on the platform's own
-  // account, so the customer's payment lands with the platform first. Stripe
-  // then automatically transfers (amount - application_fee_amount) to the
-  // teacher's connected account, while the platform keeps the application
-  // fee and pays Stripe's processing fee out of its own balance.
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    line_items: [
-      {
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Lesson booking',
-            description: `Booking ${bookingId}`,
+  // Direct charge: the session is created on the connected (teacher) account
+  // itself via the `stripeAccount` request option, so the customer pays the
+  // teacher's account directly (and Stripe's processing fee is deducted from
+  // their balance, matching this account's fees_collector: account setting).
+  // `application_fee_amount` is the platform's cut, automatically pulled
+  // from that same balance into the platform's account.
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'Lesson booking',
+              description: `Booking ${bookingId}`,
+            },
+            unit_amount: amount,
           },
-          unit_amount: amount,
+          quantity: 1,
         },
-        quantity: 1,
+      ],
+      payment_intent_data: {
+        application_fee_amount: applicationFeeAmount,
       },
-    ],
-    payment_intent_data: {
-      application_fee_amount: applicationFeeAmount,
-      transfer_data: {
-        destination: teacherAccountId,
-      },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
     },
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-  })
+    {
+      stripeAccount: teacherAccountId,
+    }
+  )
 
   return {
     url: session.url,

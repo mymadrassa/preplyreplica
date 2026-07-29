@@ -37,14 +37,14 @@ export async function POST(request: Request) {
   const startDate = new Date(startAt)
   const endDate = new Date(startDate.getTime() + duration * 60000)
 
-  // Destination charge: the platform's balance pays Stripe's real processing
-  // fee, so the application fee must cover both the commission and that fee
-  // estimate. It nets out to exactly the 40% commission as platform revenue
-  // once Stripe's actual fee is deducted (see lib/pricing.ts).
+  // Direct charge: Stripe's real processing fee is deducted automatically
+  // from the teacher's connected-account balance, so the platform's
+  // application fee is simply the commission itself (no need to bundle a
+  // fee estimate into it, unlike a destination charge).
   const pricing = calculatePricing(teacher.hourly_rate, duration / 60)
   const amount = Math.max(500, toPence(pricing.totalStudentPays))
+  const applicationFeeAmount = Math.max(0, toPence(pricing.platformNetRevenue))
   const teacherFee = toPence(pricing.teacherReceives)
-  const applicationFeeAmount = Math.max(0, amount - teacherFee)
   const platformFee = applicationFeeAmount
 
   const { data: booking, error: bookingError } = await supabase.from('bookings').insert({
