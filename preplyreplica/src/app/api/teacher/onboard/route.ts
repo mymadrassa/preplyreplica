@@ -10,7 +10,7 @@ const onboardSchema = z.object({
   languages: z.string().array().min(1),
   subjects: z.string().array().min(1),
   hourly_rate: z.coerce.number().min(10),
-  video_url: z.string().url().optional(),
+  video_url: z.union([z.string().url(), z.literal('')]).optional(),
   document_paths: z.string().array().optional(),
 })
 
@@ -33,21 +33,29 @@ export async function POST(request: Request) {
   const { data: existing } = await supabase.from('teacher_profiles').select('*').eq('id', userId).single()
 
   let stripeAccountId = existing?.stripe_account_id || null
-  if (!stripeAccountId) {
-    const account = await createTeacherConnectAccount(session.data!.session!.user!.email || '')
-    stripeAccountId = account.id
+  let accountLink
+  try {
+    if (!stripeAccountId) {
+      const account = await createTeacherConnectAccount(session.data!.session!.user!.email || '')
+      stripeAccountId = account.id
+    }
+    accountLink = await createTeacherConnectAccountLink(stripeAccountId)
+  } catch (stripeError: any) {
+    return NextResponse.json(
+      { error: stripeError?.raw?.message || stripeError?.message || 'Unable to set up Stripe payouts for this account.' },
+      { status: 502 }
+    )
   }
-
-  const accountLink = await createTeacherConnectAccountLink(stripeAccountId)
 
   const { error } = await supabase.from('teacher_profiles').upsert({
     id: userId,
+    user_id: userId,
     headline,
     bio,
     languages,
     subjects,
     hourly_rate,
-    video_url,
+    video_url: video_url || null,
     stripe_account_id: stripeAccountId,
     status: 'pending',
     updated_at: new Date().toISOString(),
