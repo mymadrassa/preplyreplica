@@ -29,17 +29,24 @@ export async function createTeacherConnectAccountLink(accountId: string) {
 
 export async function createBookingCheckoutSession({
   amount,
+  applicationFeeAmount,
   teacherAccountId,
   bookingId,
   successUrl,
   cancelUrl,
 }: {
   amount: number
+  applicationFeeAmount: number
   teacherAccountId: string
   bookingId: string
   successUrl: string
   cancelUrl: string
 }) {
+  // Destination charge: the session is created on the platform's own
+  // account, so the customer's payment lands with the platform first. Stripe
+  // then automatically transfers (amount - application_fee_amount) to the
+  // teacher's connected account, while the platform keeps the application
+  // fee and pays Stripe's processing fee out of its own balance.
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
@@ -57,6 +64,7 @@ export async function createBookingCheckoutSession({
       },
     ],
     payment_intent_data: {
+      application_fee_amount: applicationFeeAmount,
       transfer_data: {
         destination: teacherAccountId,
       },

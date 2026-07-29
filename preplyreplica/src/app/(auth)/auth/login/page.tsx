@@ -12,21 +12,25 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const supabase = createBrowserClient()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    setLoading(true)
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
+      setLoading(false)
       return
     }
 
     const userId = data?.user?.id
     if (!userId) {
       setError('Unable to sign in. Please try again.')
+      setLoading(false)
       return
     }
 
@@ -40,6 +44,7 @@ export default function LoginPage() {
 
     if (profileResult.error || !profileData?.role) {
       setError('Unable to determine your role. Please contact support.')
+      setLoading(false)
       return
     }
 
@@ -66,7 +71,7 @@ export default function LoginPage() {
           <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           <Input label="Password" name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <Button type="submit">Sign in</Button>
+          <Button type="submit" loading={loading}>Sign in</Button>
         </form>
       </div>
     </main>

@@ -1,50 +1,47 @@
-const PLATFORM_COMMISSION_RATE = 0.40; // 40%
-const STRIPE_PERCENTAGE_FEE = 0.015;    // 1.5% (cartes UK/EEA)
-const STRIPE_FIXED_FEE = 0.20;          // £0.20 fixe
-const STUDENT_STRIPE_FEE_SHARE = 0.5;   // 50% des frais Stripe pour l'élève
-const TEACHER_STRIPE_FEE_SHARE = 0.5;   // 50% des frais Stripe pour le prof
+const PLATFORM_COMMISSION_RATE = 0.40 // platform keeps 40% of the teacher's base rate
+const STRIPE_PERCENTAGE_FEE = 0.029    // Stripe US card rate: 2.9%
+const STRIPE_FIXED_FEE = 0.30          // + $0.30 fixed
+const STUDENT_STRIPE_FEE_SHARE = 0.5   // student absorbs 50% of the Stripe fee
+const TEACHER_STRIPE_FEE_SHARE = 0.5   // teacher absorbs 50% of the Stripe fee
 
 export interface PricingBreakdown {
-  teacherRate: number;
-  durationHours: number;
-  baseAmount: number;
-  platformCommission: number;
-  subtotal: number;
-  estimatedStripeFee: number;
-  studentStripeFee: number;
-  teacherStripeFee: number;
-  totalStudentPays: number;
-  teacherReceives: number;
-  platformNetRevenue: number;
-  currency: 'gbp';
+  teacherRate: number
+  durationHours: number
+  baseAmount: number
+  platformCommission: number
+  subtotal: number
+  estimatedStripeFee: number
+  studentStripeFee: number
+  teacherStripeFee: number
+  totalStudentPays: number
+  teacherReceives: number
+  platformNetRevenue: number
+  currency: 'usd'
 }
 
 /**
- * Calcule tous les montants pour une réservation
- * Tous les montants internes sont en PENCE (plus petite unité GBP) pour Stripe
- * @param teacherRate - Tarif horaire du prof en GBP (ex: 20.00)
- * @param durationHours - Durée du cours en heures (ex: 1, 0.5, 1.5, 2)
+ * Computes the full pricing breakdown for a booking. All amounts are in
+ * dollars; use toPence() to convert to the integer cents Stripe expects.
+ *
+ * Model: the platform adds a 40% commission on top of the teacher's base
+ * rate, then Stripe's processing fee on the resulting subtotal is split
+ * evenly between student and teacher (nobody absorbs it on the platform's
+ * behalf). Netting it out, the platform's actual revenue always equals the
+ * commission alone — the Stripe fee split is a wash on the platform's side.
  */
-export function calculatePricing(
-  teacherRate: number,
-  durationHours: number
-): PricingBreakdown {
-  const baseAmount = round2(teacherRate * durationHours);
-  const platformCommission = round2(baseAmount * PLATFORM_COMMISSION_RATE);
-  const subtotal = round2(baseAmount + platformCommission);
+export function calculatePricing(teacherRate: number, durationHours: number): PricingBreakdown {
+  const baseAmount = round2(teacherRate * durationHours)
+  const platformCommission = round2(baseAmount * PLATFORM_COMMISSION_RATE)
+  const subtotal = round2(baseAmount + platformCommission)
 
-  const estimatedStripeFee = round2(
-    subtotal * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE
-  );
+  const estimatedStripeFee = round2(subtotal * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE)
 
-  const studentStripeFee = round2(estimatedStripeFee * STUDENT_STRIPE_FEE_SHARE);
-  const teacherStripeFee = round2(estimatedStripeFee * TEACHER_STRIPE_FEE_SHARE);
+  const studentStripeFee = round2(estimatedStripeFee * STUDENT_STRIPE_FEE_SHARE)
+  const teacherStripeFee = round2(estimatedStripeFee * TEACHER_STRIPE_FEE_SHARE)
 
-  const totalStudentPays = round2(subtotal + studentStripeFee);
-  const teacherReceives = round2(baseAmount - teacherStripeFee);
-  const platformNetRevenue = round2(
-    totalStudentPays - teacherReceives - estimatedStripeFee
-  );
+  const totalStudentPays = round2(subtotal + studentStripeFee)
+  const teacherReceives = round2(baseAmount - teacherStripeFee)
+  const platformNetRevenue = round2(totalStudentPays - teacherReceives - estimatedStripeFee)
 
   return {
     teacherRate,
@@ -58,20 +55,20 @@ export function calculatePricing(
     totalStudentPays,
     teacherReceives,
     platformNetRevenue,
-    currency: 'gbp',
-  };
+    currency: 'usd',
+  }
 }
 
-/** Convertit un montant GBP (float) en pence (integer) pour Stripe */
+/** Converts a dollar amount (float) to cents (integer) for Stripe. */
 export function toPence(amount: number): number {
-  return Math.round(amount * 100);
+  return Math.round(amount * 100)
 }
 
-/** Convertit des pence (integer) en GBP (float) */
+/** Converts cents (integer) back to dollars (float). */
 export function toPounds(pence: number): number {
-  return round2(pence / 100);
+  return round2(pence / 100)
 }
 
 function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+  return Math.round(value * 100) / 100
 }

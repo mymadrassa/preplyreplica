@@ -64,7 +64,7 @@ export function BookingForm({ teacher }: BookingFormProps) {
         <Input label="Start time" name="start_time" type="time" value={startAt.split('T')[1] ?? ''} onChange={(event) => setStartAt(`${startAt.split('T')[0] || new Date().toISOString().slice(0, 10)}T${event.target.value}`)} required />
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <Button type="submit" disabled={loading}>{loading ? 'Processing…' : 'Continue to payment'}</Button>
+      <Button type="submit" loading={loading}>{loading ? 'Processing…' : 'Continue to payment'}</Button>
     </form>
   )
 }

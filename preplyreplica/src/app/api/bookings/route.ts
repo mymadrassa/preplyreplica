@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { createBookingCheckoutSession } from '@/lib/stripe'
+import { calculatePricing, toPence } from '@/lib/pricing'
 
 const bookingSchema = z.object({
   teacherId: z.string().uuid(),
@@ -35,9 +36,16 @@ export async function POST(request: Request) {
 
   const startDate = new Date(startAt)
   const endDate = new Date(startDate.getTime() + duration * 60000)
-  const amount = Math.max(500, Math.round((teacher.hourly_rate * duration) / 60 * 100))
-  const platformFee = Math.round(amount * Number(process.env.STRIPE_PLATFORM_FEE_PERCENT || '15') / 100)
-  const teacherFee = amount - platformFee
+
+  // Destination charge: the platform's balance pays Stripe's real processing
+  // fee, so the application fee must cover both the commission and that fee
+  // estimate. It nets out to exactly the 40% commission as platform revenue
+  // once Stripe's actual fee is deducted (see lib/pricing.ts).
+  const pricing = calculatePricing(teacher.hourly_rate, duration / 60)
+  const amount = Math.max(500, toPence(pricing.totalStudentPays))
+  const teacherFee = toPence(pricing.teacherReceives)
+  const applicationFeeAmount = Math.max(0, amount - teacherFee)
+  const platformFee = applicationFeeAmount
 
   const { data: booking, error: bookingError } = await supabase.from('bookings').insert({
     student_id: userId,
@@ -56,6 +64,7 @@ export async function POST(request: Request) {
 
   const { url, sessionId, paymentIntent } = await createBookingCheckoutSession({
     amount,
+    applicationFeeAmount,
     teacherAccountId: teacher.stripe_account_id,
     bookingId: booking.id,
     successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/bookings`,

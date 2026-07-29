@@ -1,9 +1,9 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/availability/page.tsx
 import { createServerClient } from '@/lib/supabase/server'
-import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
 import { Select } from '@/components/Select'
+import { SubmitButton } from '@/components/SubmitButton'
 
 async function addSlot(formData: FormData) {
   'use server'
@@ -99,7 +99,7 @@ export default async function TeacherAvailabilityPage() {
               <Select label="Weekday" name="weekday" options={['0','1','2','3','4','5','6'].map((day) => ({ value: day, label: `Day ${day}` }))} required />
               <Input label="Start time" name="start_time" type="time" required />
               <Input label="End time" name="end_time" type="time" required />
-              <Button type="submit">Save slot</Button>
+              <SubmitButton>Save slot</SubmitButton>
             </form>
           </Card>
           <Card>
@@ -109,7 +109,7 @@ export default async function TeacherAvailabilityPage() {
               <Select label="Type" name="exception_type" options={[{ value: 'blocked', label: 'Blocked' }, { value: 'added', label: 'Added' }]} required />
               <Input label="Start time" name="start_time" type="time" />
               <Input label="End time" name="end_time" type="time" />
-              <Button type="submit">Save exception</Button>
+              <SubmitButton>Save exception</SubmitButton>
             </form>
           </Card>
         </aside>

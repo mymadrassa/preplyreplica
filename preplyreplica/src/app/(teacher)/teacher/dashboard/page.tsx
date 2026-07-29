@@ -1,5 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/dashboard/page.tsx
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -13,6 +14,10 @@ export default async function TeacherDashboardPage() {
     supabase.from('teacher_profiles').select('*, profiles(*)').eq('id', userId).single(),
     supabase.from('bookings').select('*, profiles!student_id(*)').eq('teacher_id', userId).order('start_at', { ascending: true }).limit(10),
   ])
+
+  if (!teacher) {
+    redirect('/teacher/onboarding')
+  }
 
   return (
     <main className="container mx-auto px-4 py-12">
@@ -34,7 +39,7 @@ export default async function TeacherDashboardPage() {
         </Card>
         <Card>
           <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Rating</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{teacher?.rating_avg.toFixed(1)} / 5</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-900">{Number(teacher?.rating_avg ?? 0).toFixed(1)} / 5</p>
           <p className="text-slate-600">{teacher?.rating_count ?? 0} reviews</p>
         </Card>
         <Card>

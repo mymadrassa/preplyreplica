@@ -1,10 +1,10 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(student)/bookings/page.tsx
 import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@/lib/supabase/server'
-import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
 import { TextArea } from '@/components/TextArea'
+import { SubmitButton } from '@/components/SubmitButton'
 
 async function submitReview(formData: FormData) {
   'use server'
@@ -69,7 +69,7 @@ export default async function StudentBookingsPage() {
                       <Input label="Rating (1-5)" name="rating" type="number" min={1} max={5} required />
                       <TextArea label="Comment" name="comment" rows={3} />
                     </div>
-                    <Button type="submit">Submit review</Button>
+                    <SubmitButton>Submit review</SubmitButton>
                   </form>
                 ) : null}
               </div>
