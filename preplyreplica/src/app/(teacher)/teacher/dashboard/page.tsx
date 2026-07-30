@@ -21,8 +21,21 @@ export default async function TeacherDashboardPage() {
           <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Teacher dashboard</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your teaching schedule</h1>
         </div>
-        <Link href="/teacher/availability" className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Manage availability</Link>
+        <div className="flex gap-3">
+          <Link href="/teacher/onboarding" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">Edit profile</Link>
+          <Link href="/teacher/availability" className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Manage availability</Link>
+        </div>
       </div>
+      {!teacher?.stripe_charges_enabled ? (
+        <div className="mb-8 flex flex-col gap-3 rounded-3xl border border-amber-300 bg-amber-50 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-amber-900">
+            <strong>Finish your Stripe payout setup</strong> to start accepting bookings — your profile can't be approved or receive payments until this is complete.
+          </p>
+          <Link href="/teacher/onboarding" className="whitespace-nowrap rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">
+            Complete Stripe setup
+          </Link>
+        </div>
+      ) : null}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Profile status</p>
@@ -39,7 +52,7 @@ export default async function TeacherDashboardPage() {
         </Card>
         <Card>
           <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Hourly rate</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">${teacher?.hourly_rate}</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-900">£{teacher?.hourly_rate}</p>
         </Card>
       </div>
       <div className="mt-10">
@@ -52,7 +65,19 @@ export default async function TeacherDashboardPage() {
                   <p className="text-sm uppercase tracking-[0.2em] text-slate-500">{booking.subject}</p>
                   <p className="text-slate-700">{new Date(booking.start_at).toLocaleString()}</p>
                 </div>
-                <p className="font-semibold text-slate-900">{booking.status}</p>
+                <div className="text-right">
+                  <p className="font-semibold text-slate-900">{booking.status}</p>
+                  {booking.status === 'confirmed' ? (
+                    <div className="mt-1 flex flex-col items-end gap-1">
+                      <Link href={`/session/${booking.id}`} className="text-sm font-semibold text-brand-700 underline">
+                        Join session
+                      </Link>
+                      <a href={`/api/bookings/${booking.id}/calendar`} className="text-sm font-medium text-brand-600 underline">
+                        Add to calendar
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </Card>
           )) : <Card><p className="text-slate-600">No upcoming bookings yet.</p></Card>}

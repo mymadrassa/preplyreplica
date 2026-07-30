@@ -8,15 +8,18 @@ import { StatusBadge } from '@/components/StatusBadge'
 export function AdminTeacherCard({ teacher }: any) {
   const [status, setStatus] = useState(teacher.status)
   const [error, setError] = useState('')
+  const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | 'suspend' | null>(null)
 
   async function handleAction(action: 'approve' | 'reject' | 'suspend') {
     setError('')
+    setPendingAction(action)
     const response = await fetch('/api/teacher/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teacherId: teacher.id, action }),
     })
     const result = await response.json()
+    setPendingAction(null)
     if (!response.ok) {
       setError(result.error || 'Unable to update status')
       return
@@ -35,9 +38,9 @@ export function AdminTeacherCard({ teacher }: any) {
       </div>
       <p className="mt-4 text-slate-600">{teacher.bio}</p>
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <Button type="button" onClick={() => handleAction('approve')} variant="primary">Approve</Button>
-        <Button type="button" onClick={() => handleAction('reject')} variant="secondary">Reject</Button>
-        <Button type="button" onClick={() => handleAction('suspend')} variant="secondary">Suspend</Button>
+        <Button type="button" onClick={() => handleAction('approve')} variant="primary" loading={pendingAction === 'approve'} disabled={pendingAction !== null}>Approve</Button>
+        <Button type="button" onClick={() => handleAction('reject')} variant="secondary" loading={pendingAction === 'reject'} disabled={pendingAction !== null}>Reject</Button>
+        <Button type="button" onClick={() => handleAction('suspend')} variant="secondary" loading={pendingAction === 'suspend'} disabled={pendingAction !== null}>Suspend</Button>
       </div>
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
     </div>

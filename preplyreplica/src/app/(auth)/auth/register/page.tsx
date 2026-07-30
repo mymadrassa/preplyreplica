@@ -15,15 +15,18 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'student' | 'teacher'>('student')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const supabase = createBrowserClient()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    setLoading(true)
 
     const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) {
       setError(error.message)
+      setLoading(false)
       return
     }
 
@@ -40,11 +43,14 @@ export default function RegisterPage() {
 
       if (profileError) {
         setError(`Profile error: ${profileError.message}`)
+        setLoading(false)
         return
       }
 
       router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
-          }
+    } else {
+      setLoading(false)
+    }
   }
 
   return (
@@ -66,7 +72,7 @@ export default function RegisterPage() {
             required
           />
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <Button type="submit">Create account</Button>
+          <Button type="submit" loading={loading}>Create account</Button>
         </form>
       </div>
     </main>

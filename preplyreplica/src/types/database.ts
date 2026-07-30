@@ -12,6 +12,7 @@ export interface Database {
           username: string | null
           role: 'student' | 'teacher' | 'admin'
           avatar_url: string | null
+          pending_stripe_fees: number
           created_at: string
         }
         Insert: {
@@ -21,6 +22,7 @@ export interface Database {
           username?: string | null
           role?: 'student' | 'teacher' | 'admin'
           avatar_url?: string | null
+          pending_stripe_fees?: number
           created_at?: string
         }
         Update: {
@@ -29,6 +31,7 @@ export interface Database {
           username?: string | null
           role?: 'student' | 'teacher' | 'admin'
           avatar_url?: string | null
+          pending_stripe_fees?: number
           created_at?: string
         }
       }
@@ -174,6 +177,7 @@ export interface Database {
           total_student_pays: number | null
           teacher_receives: number | null
           stripe_checkout_session_id: string | null
+          reminder_sent_at: string | null
           created_at: string
         }
         Insert: {
@@ -196,6 +200,7 @@ export interface Database {
           total_student_pays?: number | null
           teacher_receives?: number | null
           stripe_checkout_session_id?: string | null
+          reminder_sent_at?: string | null
           created_at?: string
         }
         Update: {
@@ -217,6 +222,7 @@ export interface Database {
           total_student_pays?: number | null
           teacher_receives?: number | null
           stripe_checkout_session_id?: string | null
+          reminder_sent_at?: string | null
           created_at?: string
         }
       }
@@ -230,6 +236,9 @@ export interface Database {
           currency: string
           platform_fee: number
           teacher_fee: number
+          stripe_fee_estimate: number
+          pending_fees_billed: number
+          payout_at: string | null
           status: string
           created_at: string
         }
@@ -242,6 +251,9 @@ export interface Database {
           currency?: string
           platform_fee: number
           teacher_fee: number
+          stripe_fee_estimate?: number
+          pending_fees_billed?: number
+          payout_at?: string | null
           status?: string
           created_at?: string
         }
@@ -253,6 +265,9 @@ export interface Database {
           currency?: string
           platform_fee?: number
           teacher_fee?: number
+          stripe_fee_estimate?: number
+          pending_fees_billed?: number
+          payout_at?: string | null
           status?: string
           created_at?: string
         }

@@ -1,8 +1,8 @@
-// /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/api/bookings/route.ts
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { createBookingCheckoutSession } from '@/lib/stripe'
+import { calculatePricing, toPence } from '@/lib/pricing'
 
 const bookingSchema = z.object({
   teacherId: z.string().uuid(),
@@ -33,11 +33,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Teacher is not available for booking' }, { status: 400 })
   }
 
+  const { data: studentProfile } = await supabase.from('profiles').select('pending_stripe_fees').eq('id', userId).single()
+  const pendingFeesOwed = Number((studentProfile as { pending_stripe_fees: number } | null)?.pending_stripe_fees ?? 0)
+
   const startDate = new Date(startAt)
   const endDate = new Date(startDate.getTime() + duration * 60000)
-  const amount = Math.max(500, Math.round((teacher.hourly_rate * duration) / 60 * 100))
-  const platformFee = Math.round(amount * Number(process.env.STRIPE_PLATFORM_FEE_PERCENT || '15') / 100)
-  const teacherFee = amount - platformFee
+
+  // Teacher always nets their full base rate. The commission funds the
+  // platform's cut; Stripe's real processing fee (deducted automatically
+  // from the teacher's connected-account balance under direct charges) is
+  // covered by reducing the application fee accordingly, and recouped from
+  // the student later rather than split per-transaction — see lib/pricing.ts.
+  const pricing = calculatePricing(teacher.hourly_rate, duration / 60)
+  const amount = Math.max(500, toPence(pricing.totalStudentPays) + toPence(pendingFeesOwed))
+  const teacherFee = toPence(pricing.teacherReceives)
+  const commissionAfterFee = Math.max(0, toPence(pricing.platformCommission) - toPence(pricing.estimatedStripeFee))
+  const applicationFeeAmount = commissionAfterFee + toPence(pendingFeesOwed)
+  const platformFee = applicationFeeAmount
 
   const { data: booking, error: bookingError } = await supabase.from('bookings').insert({
     student_id: userId,
@@ -56,6 +68,7 @@ export async function POST(request: Request) {
 
   const { url, sessionId, paymentIntent } = await createBookingCheckoutSession({
     amount,
+    applicationFeeAmount,
     teacherAccountId: teacher.stripe_account_id,
     bookingId: booking.id,
     successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/bookings`,
@@ -67,8 +80,11 @@ export async function POST(request: Request) {
     stripe_checkout_session_id: sessionId,
     stripe_payment_intent_id: paymentIntent,
     amount,
+    currency: 'gbp',
     platform_fee: platformFee,
     teacher_fee: teacherFee,
+    stripe_fee_estimate: pricing.estimatedStripeFee,
+    pending_fees_billed: pendingFeesOwed,
     status: 'pending',
   })
 

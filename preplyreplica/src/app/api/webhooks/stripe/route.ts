@@ -40,8 +40,19 @@ export async function POST(request: Request) {
       .single<PaymentRow>()
 
     if (payment) {
+      const { data: booking } = await supabase.from('bookings').select('student_id').eq('id', payment.booking_id).single()
       await supabase.from('bookings').update({ status: 'confirmed' } as Database['public']['Tables']['bookings']['Update']).eq('id', payment.booking_id)
       await supabase.from('payments').update({ status: 'succeeded' } as Database['public']['Tables']['payments']['Update']).eq('id', payment.id)
+
+      if (booking?.student_id) {
+        const { data: profile } = await supabase.from('profiles').select('pending_stripe_fees').eq('id', booking.student_id).single()
+        const currentPending = Number((profile as { pending_stripe_fees: number } | null)?.pending_stripe_fees ?? 0)
+        const nextPending = currentPending - Number(payment.pending_fees_billed ?? 0) + Number(payment.stripe_fee_estimate ?? 0)
+        await supabase
+          .from('profiles')
+          .update({ pending_stripe_fees: Math.max(0, nextPending) } as Database['public']['Tables']['profiles']['Update'])
+          .eq('id', booking.student_id)
+      }
     }
   }
 

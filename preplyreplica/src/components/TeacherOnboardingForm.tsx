@@ -88,7 +88,7 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {success ? <p className="text-sm text-emerald-600">{success}</p> : null}
-      <Button type="submit" disabled={loading}>{loading ? 'Submitting…' : 'Save and continue Stripe onboarding'}</Button>
+      <Button type="submit" loading={loading}>{loading ? 'Submitting…' : 'Save and continue Stripe onboarding'}</Button>
     </form>
   )
 }

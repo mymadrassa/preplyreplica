@@ -78,7 +78,7 @@ export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
           <Card>
             <div className="space-y-4">
               <p className="text-sm uppercase tracking-[0.2em] text-brand-700">Hourly rate</p>
-              <p className="text-3xl font-semibold text-slate-900">${teacher.hourly_rate}</p>
+              <p className="text-3xl font-semibold text-slate-900">£{teacher.hourly_rate}</p>
               <p className="text-slate-600">Pay securely with Stripe and join the Jitsi meeting when the lesson starts.</p>
             </div>
           </Card>

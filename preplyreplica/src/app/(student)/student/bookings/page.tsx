@@ -1,10 +1,11 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(student)/bookings/page.tsx
 import { revalidatePath } from 'next/cache'
+import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
-import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
 import { TextArea } from '@/components/TextArea'
+import { SubmitButton } from '@/components/SubmitButton'
 
 async function submitReview(formData: FormData) {
   'use server'
@@ -59,6 +60,16 @@ export default async function StudentBookingsPage() {
                   <div className="text-right text-slate-600">
                     <p>{new Date(booking.start_at).toLocaleString()}</p>
                     <p className="font-semibold">{booking.status}</p>
+                    {booking.status === 'confirmed' ? (
+                      <div className="mt-1 flex flex-col items-end gap-1">
+                        <Link href={`/session/${booking.id}`} className="text-sm font-semibold text-brand-700 underline">
+                          Join session
+                        </Link>
+                        <a href={`/api/bookings/${booking.id}/calendar`} className="text-sm font-medium text-brand-600 underline">
+                          Add to calendar
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 {booking.status === 'completed' ? (
@@ -69,7 +80,7 @@ export default async function StudentBookingsPage() {
                       <Input label="Rating (1-5)" name="rating" type="number" min={1} max={5} required />
                       <TextArea label="Comment" name="comment" rows={3} />
                     </div>
-                    <Button type="submit">Submit review</Button>
+                    <SubmitButton>Submit review</SubmitButton>
                   </form>
                 ) : null}
               </div>

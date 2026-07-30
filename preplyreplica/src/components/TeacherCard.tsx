@@ -24,7 +24,7 @@ export function TeacherCard({ teacher }: TeacherCardProps) {
           <p className="mt-1 text-sm text-slate-600">{teacher.headline}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-          <span>${teacher.hourly_rate}/hr</span>
+          <span>£{teacher.hourly_rate}/hr</span>
           <span>{teacher.subjects.slice(0, 3).join(', ')}</span>
           <span>{teacher.languages.slice(0, 3).join(', ')}</span>
         </div>

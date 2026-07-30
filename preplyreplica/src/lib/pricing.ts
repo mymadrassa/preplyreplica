@@ -1,77 +1,57 @@
-const PLATFORM_COMMISSION_RATE = 0.40; // 40%
-const STRIPE_PERCENTAGE_FEE = 0.015;    // 1.5% (cartes UK/EEA)
-const STRIPE_FIXED_FEE = 0.20;          // £0.20 fixe
-const STUDENT_STRIPE_FEE_SHARE = 0.5;   // 50% des frais Stripe pour l'élève
-const TEACHER_STRIPE_FEE_SHARE = 0.5;   // 50% des frais Stripe pour le prof
+const PLATFORM_COMMISSION_RATE = 0.40 // platform keeps 40% of the teacher's base rate
+const STRIPE_PERCENTAGE_FEE = 0.015    // Stripe UK/EEA card rate: 1.5%
+const STRIPE_FIXED_FEE = 0.20          // + £0.20 fixed
 
 export interface PricingBreakdown {
-  teacherRate: number;
-  durationHours: number;
-  baseAmount: number;
-  platformCommission: number;
-  subtotal: number;
-  estimatedStripeFee: number;
-  studentStripeFee: number;
-  teacherStripeFee: number;
-  totalStudentPays: number;
-  teacherReceives: number;
-  platformNetRevenue: number;
-  currency: 'gbp';
+  teacherRate: number
+  durationHours: number
+  baseAmount: number
+  platformCommission: number
+  totalStudentPays: number
+  estimatedStripeFee: number
+  teacherReceives: number
+  currency: 'gbp'
 }
 
 /**
- * Calcule tous les montants pour une réservation
- * Tous les montants internes sont en PENCE (plus petite unité GBP) pour Stripe
- * @param teacherRate - Tarif horaire du prof en GBP (ex: 20.00)
- * @param durationHours - Durée du cours en heures (ex: 1, 0.5, 1.5, 2)
+ * Computes the per-booking pricing breakdown. All amounts are in pounds;
+ * use toPence() to convert to the integer pence Stripe expects.
+ *
+ * Policy: the teacher always receives their full base rate — they never
+ * absorb any part of the Stripe processing fee. The platform keeps a 40%
+ * commission. The Stripe fee itself is not charged per-transaction to
+ * either party; it's tracked separately (see profiles.pending_stripe_fees)
+ * and billed to the student on their next booking instead.
  */
-export function calculatePricing(
-  teacherRate: number,
-  durationHours: number
-): PricingBreakdown {
-  const baseAmount = round2(teacherRate * durationHours);
-  const platformCommission = round2(baseAmount * PLATFORM_COMMISSION_RATE);
-  const subtotal = round2(baseAmount + platformCommission);
-
-  const estimatedStripeFee = round2(
-    subtotal * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE
-  );
-
-  const studentStripeFee = round2(estimatedStripeFee * STUDENT_STRIPE_FEE_SHARE);
-  const teacherStripeFee = round2(estimatedStripeFee * TEACHER_STRIPE_FEE_SHARE);
-
-  const totalStudentPays = round2(subtotal + studentStripeFee);
-  const teacherReceives = round2(baseAmount - teacherStripeFee);
-  const platformNetRevenue = round2(
-    totalStudentPays - teacherReceives - estimatedStripeFee
-  );
+export function calculatePricing(teacherRate: number, durationHours: number): PricingBreakdown {
+  const baseAmount = round2(teacherRate * durationHours)
+  const platformCommission = round2(baseAmount * PLATFORM_COMMISSION_RATE)
+  const totalStudentPays = round2(baseAmount + platformCommission)
+  const estimatedStripeFee = round2(totalStudentPays * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE)
+  const teacherReceives = baseAmount
 
   return {
     teacherRate,
     durationHours,
     baseAmount,
     platformCommission,
-    subtotal,
-    estimatedStripeFee,
-    studentStripeFee,
-    teacherStripeFee,
     totalStudentPays,
+    estimatedStripeFee,
     teacherReceives,
-    platformNetRevenue,
     currency: 'gbp',
-  };
+  }
 }
 
-/** Convertit un montant GBP (float) en pence (integer) pour Stripe */
+/** Converts a dollar amount (float) to cents (integer) for Stripe. */
 export function toPence(amount: number): number {
-  return Math.round(amount * 100);
+  return Math.round(amount * 100)
 }
 
-/** Convertit des pence (integer) en GBP (float) */
+/** Converts cents (integer) back to dollars (float). */
 export function toPounds(pence: number): number {
-  return round2(pence / 100);
+  return round2(pence / 100)
 }
 
 function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+  return Math.round(value * 100) / 100
 }
