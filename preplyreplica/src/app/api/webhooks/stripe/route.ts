@@ -87,7 +87,13 @@ export async function POST(request: Request) {
 
   if (event.type === 'account.updated') {
     const account = event.data.object as Stripe.Account
-    await supabase.from('teacher_profiles').update({ stripe_account_id: account.id } as Database['public']['Tables']['teacher_profiles']['Update']).eq('stripe_account_id', account.id)
+    await supabase
+      .from('teacher_profiles')
+      .update({
+        stripe_charges_enabled: account.charges_enabled,
+        stripe_payouts_enabled: account.payouts_enabled,
+      } as Database['public']['Tables']['teacher_profiles']['Update'])
+      .eq('stripe_account_id', account.id)
   }
 
   return NextResponse.json({ received: true })

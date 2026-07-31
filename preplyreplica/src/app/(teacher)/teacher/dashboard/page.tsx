@@ -3,8 +3,13 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
+import { StripeOnboardingSuccessBanner } from '@/components/StripeOnboardingSuccessBanner'
 
-export default async function TeacherDashboardPage() {
+export default async function TeacherDashboardPage({
+  searchParams,
+}: {
+  searchParams: { stripe_onboarding?: string }
+}) {
   const supabase = createServerClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
@@ -35,6 +40,8 @@ export default async function TeacherDashboardPage() {
             Complete Stripe setup
           </Link>
         </div>
+      ) : searchParams.stripe_onboarding === 'success' ? (
+        <StripeOnboardingSuccessBanner />
       ) : null}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>

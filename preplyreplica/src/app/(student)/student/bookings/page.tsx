@@ -43,9 +43,12 @@ export default async function StudentBookingsPage() {
 
   return (
     <main className="container mx-auto px-4 py-12">
-      <div className="mb-8">
-        <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Student bookings</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your lesson history</h1>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Student bookings</p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your lesson history</h1>
+        </div>
+        <Link href="/student/dashboard" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">Back to dashboard</Link>
       </div>
       <div className="grid gap-6">
         {bookings?.length ? (

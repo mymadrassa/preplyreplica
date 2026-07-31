@@ -32,7 +32,7 @@ export async function createTeacherConnectAccountLink(accountId: string) {
   return stripe.accountLinks.create({
     account: accountId,
     refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/onboarding`,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/dashboard`,
+    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/dashboard?stripe_onboarding=success`,
     type: 'account_onboarding',
   })
 }
@@ -100,7 +100,7 @@ export async function payoutToTeacherAccount(teacherAccountId: string, amount: n
   return stripe.payouts.create(
     {
       amount,
-      currency: 'usd',
+      currency: 'gbp',
     },
     {
       stripeAccount: teacherAccountId,

@@ -30,7 +30,10 @@ export default async function StudentDashboardPage() {
           <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Student dashboard</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your upcoming lessons</h1>
         </div>
-        <Link href="/teachers" className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Browse teachers</Link>
+        <div className="flex gap-3">
+          <Link href="/student/bookings" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">View all lessons</Link>
+          <Link href="/teachers" className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Browse teachers</Link>
+        </div>
       </div>
       <div className="grid gap-6">
         {bookings?.length ? (
@@ -45,6 +48,16 @@ export default async function StudentDashboardPage() {
                 <div className="text-right text-slate-700">
                   <p className="font-semibold">{booking.status}</p>
                   <p>{booking.duration} min</p>
+                  {booking.status === 'confirmed' ? (
+                    <div className="mt-1 flex flex-col items-end gap-1">
+                      <Link href={`/session/${booking.id}`} className="text-sm font-semibold text-brand-700 underline">
+                        Join session
+                      </Link>
+                      <a href={`/api/bookings/${booking.id}/calendar`} className="text-sm font-medium text-brand-600 underline">
+                        Add to calendar
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </Card>

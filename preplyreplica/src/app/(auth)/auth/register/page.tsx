@@ -7,7 +7,9 @@ import { createBrowserClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/database'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
+import { PasswordInput } from '@/components/PasswordInput'
 import { Select } from '@/components/Select'
+import { FormMessage } from '@/components/FormMessage'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -54,27 +56,29 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="container mx-auto px-4 py-12">
-      <div className="mx-auto max-w-md space-y-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-slate-900">Register</h1>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          <Input label="Password" name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          <Select
-            label="Register as"
-            name="role"
-            value={role}
-            onChange={(event) => setRole(event.target.value as 'student' | 'teacher')}
-            options={[
-              { value: 'student', label: 'Student' },
-              { value: 'teacher', label: 'Teacher' },
-            ]}
-            required
-          />
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <Button type="submit" loading={loading}>Create account</Button>
-        </form>
+    <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
+      <div className="text-center">
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-600">Get started</p>
+        <h1 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">Create your account</h1>
+        <p className="mt-3 text-slate-600">Join as a student to book lessons, or a teacher to start earning.</p>
       </div>
+      <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
+        <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        <Select
+          label="Register as"
+          name="role"
+          value={role}
+          onChange={(event) => setRole(event.target.value as 'student' | 'teacher')}
+          options={[
+            { value: 'student', label: 'Student' },
+            { value: 'teacher', label: 'Teacher' },
+          ]}
+          required
+        />
+        {error ? <FormMessage type="error">{error}</FormMessage> : null}
+        <Button type="submit" loading={loading}>Create account</Button>
+      </form>
     </main>
   )
 }
