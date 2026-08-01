@@ -63,11 +63,19 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
-      <div className="text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-600">Welcome back</p>
-        <h1 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">Sign in to your account</h1>
-        <p className="mt-3 text-slate-600">Access your lessons, bookings and teacher dashboard.</p>
+    <main className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-16 sm:px-6 lg:px-8">
+      <div className="w-full rounded-[2rem] bg-white p-8 shadow-soft sm:p-12">
+        <div className="mb-10 text-center">
+          <p className="text-sm uppercase tracking-[0.3em] text-brand-600">Welcome back</p>
+          <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">Sign in to your account</h1>
+          <p className="mt-3 text-slate-600">Access your lessons, bookings and teacher dashboard.</p>
+        </div>
+        <form onSubmit={handleSubmit} className="grid gap-6">
+          <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <Input label="Password" name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <Button type="submit" loading={loading}>Sign in</Button>
+        </form>
       </div>
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
         <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />

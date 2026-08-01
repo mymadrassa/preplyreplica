@@ -20,6 +20,10 @@ export default async function TeacherDashboardPage({
     supabase.from('bookings').select('*, profiles!student_id(*)').eq('teacher_id', userId).order('start_at', { ascending: true }).limit(10),
   ])
 
+  if (!teacher) {
+    redirect('/teacher/onboarding')
+  }
+
   return (
     <main className="container mx-auto px-4 py-12">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

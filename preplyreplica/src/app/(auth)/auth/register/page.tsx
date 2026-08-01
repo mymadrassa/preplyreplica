@@ -4,7 +4,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
-import type { Database } from '@/types/database'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -17,6 +16,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'student' | 'teacher'>('student')
   const [error, setError] = useState('')
+  const [checkEmail, setCheckEmail] = useState(false)
   const [loading, setLoading] = useState(false)
   const supabase = createBrowserClient()
 
@@ -25,7 +25,14 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: { role },
+      },
+    })
     if (error) {
       setError(error.message)
       setLoading(false)
@@ -59,6 +66,7 @@ export default function RegisterPage() {
         return
       }
 
+    if (data.session) {
       router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
     } else {
       setLoading(false)
