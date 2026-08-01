@@ -5,8 +5,15 @@ import { createServerClient } from '@/lib/supabase/server'
 
 const validationSchema = z.object({
   teacherId: z.string().uuid(),
-  action: z.enum(['approve', 'reject', 'suspend']),
+  action: z.enum(['approve', 'reject', 'suspend', 'reset']),
 })
+
+const statusByAction: Record<string, 'approved' | 'rejected' | 'suspended' | 'pending'> = {
+  approve: 'approved',
+  reject: 'rejected',
+  suspend: 'suspended',
+  reset: 'pending',
+}
 
 export async function POST(request: Request) {
   const supabase = createServerClient()
@@ -27,7 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parseResult.error.message }, { status: 400 })
   }
 
-  const status = parseResult.data.action === 'approve' ? 'approved' : parseResult.data.action === 'reject' ? 'rejected' : 'suspended'
+  const status = statusByAction[parseResult.data.action]
   const { error } = await supabase.from('teacher_profiles').update({ status }).eq('id', parseResult.data.teacherId)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

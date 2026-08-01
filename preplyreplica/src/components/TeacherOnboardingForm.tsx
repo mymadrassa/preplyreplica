@@ -6,11 +6,7 @@ import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { TextArea } from '@/components/TextArea'
-import { SUBJECTS, LANGUAGES } from '@/lib/constants'
-
-function toggleValue(list: string[], value: string) {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
-}
+import { FormMessage } from '@/components/FormMessage'
 
 export function TeacherOnboardingForm({ existingProfile }: any) {
   const supabase = createBrowserClient()
@@ -24,6 +20,7 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const stripeAlreadySetUp = existingProfile?.stripe_charges_enabled === true
 
   async function uploadDocuments(files: FileList) {
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_TEACHER_DOCS || 'teacher-documents'
@@ -77,7 +74,13 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
         return
       }
 
-      window.location.href = data.onboardingUrl
+      if (data.onboardingUrl) {
+        window.location.href = data.onboardingUrl
+        return
+      }
+
+      setSuccess('Profile updated.')
+      setLoading(false)
     } catch (err: any) {
       setError(err.message || 'Upload failed.')
       setLoading(false)
@@ -153,9 +156,11 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
         </p>
         <input type="file" accept="application/pdf,image/*" multiple onChange={(event) => setDocuments(event.target.files)} className="mt-2 w-full text-sm text-slate-700" />
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {success ? <p className="text-sm text-emerald-600">{success}</p> : null}
-      <Button type="submit" loading={loading}>{loading ? 'Submitting…' : 'Save and continue Stripe onboarding'}</Button>
+      {error ? <FormMessage type="error">{error}</FormMessage> : null}
+      {success ? <FormMessage type="success">{success}</FormMessage> : null}
+      <Button type="submit" loading={loading}>
+        {loading ? 'Saving…' : stripeAlreadySetUp ? 'Save changes' : 'Save and continue Stripe onboarding'}
+      </Button>
     </form>
   )
 }

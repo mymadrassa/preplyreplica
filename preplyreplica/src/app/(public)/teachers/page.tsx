@@ -16,6 +16,9 @@ interface TeachersPageProps {
   }
 }
 
+// Search/filter bar is intentionally available to every visitor regardless
+// of role (student, teacher, admin, or logged out) — only the booking
+// action itself is restricted to students, on the individual teacher page.
 export default async function TeachersPage({ searchParams }: TeachersPageProps) {
   const supabase = createServerClient()
   const { data: teachers } = await supabase
@@ -49,15 +52,17 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
     <main className="container mx-auto px-4 py-12">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Teachers</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-700">Teachers</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">Approved tutors available now</h1>
         </div>
         <Link href="/auth/register">
-          <span className="inline-flex items-center rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Become a teacher</span>
+          <span className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-900/10 transition-all hover:-translate-y-px hover:bg-brand-700 hover:shadow-md">
+            Become a teacher
+          </span>
         </Link>
       </div>
 
-      <form method="get" className="mb-10 grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+      <form method="get" className="mb-10 grid gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card sm:grid-cols-2 lg:grid-cols-4">
         <Select
           label="Subject"
           name="subject"
@@ -83,7 +88,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
         />
         <div className="flex items-end justify-end gap-3 sm:col-span-2 lg:col-span-4">
           {hasActiveFilters ? (
-            <Link href="/teachers" className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">
+            <Link href="/teachers" className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-px hover:border-slate-300 hover:shadow-sm">
               Clear filters
             </Link>
           ) : null}
@@ -109,7 +114,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
             />
           ))
         ) : (
-          <p className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-slate-600 md:col-span-2 lg:col-span-3">
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-slate-600 md:col-span-2 lg:col-span-3">
             {allTeachers.length ? 'No teachers match your filters. Try widening your search.' : 'No approved teachers are available yet.'}
           </p>
         )}

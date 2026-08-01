@@ -17,9 +17,9 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={clsx(
-        'inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-70',
-        variant === 'primary' && 'bg-brand-500 text-white hover:bg-brand-600',
-        variant === 'secondary' && 'border border-slate-300 bg-white text-slate-900 hover:border-slate-400 hover:bg-slate-50',
+        'inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
+        variant === 'primary' && 'bg-brand-600 text-white shadow-sm shadow-brand-900/10 hover:-translate-y-px hover:bg-brand-700 hover:shadow-md active:translate-y-0',
+        variant === 'secondary' && 'border border-slate-200 bg-white text-slate-700 hover:-translate-y-px hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm active:translate-y-0',
         className
       )}
       {...props}

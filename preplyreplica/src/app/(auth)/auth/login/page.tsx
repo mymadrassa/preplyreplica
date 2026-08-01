@@ -3,9 +3,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
+import { PasswordInput } from '@/components/PasswordInput'
+import { FormMessage } from '@/components/FormMessage'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -74,6 +77,17 @@ export default function LoginPage() {
           <Button type="submit" loading={loading}>Sign in</Button>
         </form>
       </div>
+      <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
+        <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <div>
+          <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <Link href="/auth/forgot-password" className="mt-2 inline-block text-sm font-medium text-brand-600 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
+        {error ? <FormMessage type="error">{error}</FormMessage> : null}
+        <Button type="submit" loading={loading}>Sign in</Button>
+      </form>
     </main>
   )
 }

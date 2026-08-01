@@ -6,6 +6,7 @@ import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { Select } from '@/components/Select'
+import { FormMessage } from '@/components/FormMessage'
 
 interface BookingFormProps {
   teacher: {
@@ -63,7 +64,7 @@ export function BookingForm({ teacher }: BookingFormProps) {
         <Input label="Start date" name="start_date" type="date" value={startAt.split('T')[0]} onChange={(event) => setStartAt(`${event.target.value}T${startAt.split('T')[1] ?? '12:00'}`)} required />
         <Input label="Start time" name="start_time" type="time" value={startAt.split('T')[1] ?? ''} onChange={(event) => setStartAt(`${startAt.split('T')[0] || new Date().toISOString().slice(0, 10)}T${event.target.value}`)} required />
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <FormMessage type="error">{error}</FormMessage> : null}
       <Button type="submit" loading={loading}>{loading ? 'Processing…' : 'Continue to payment'}</Button>
     </form>
   )

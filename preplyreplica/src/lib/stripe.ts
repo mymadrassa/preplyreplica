@@ -15,6 +15,16 @@ export async function createTeacherConnectAccount(email: string, country?: strin
       card_payments: { requested: true },
       transfers: { requested: true },
     },
+    // Funds stay in the connected account's Stripe balance instead of
+    // auto-transferring to their bank — the platform explicitly pays them
+    // out (via payoutToTeacherAccount) only once a booked session completes.
+    settings: {
+      payouts: {
+        schedule: {
+          interval: 'manual',
+        },
+      },
+    },
   })
 }
 
@@ -22,7 +32,7 @@ export async function createTeacherConnectAccountLink(accountId: string) {
   return stripe.accountLinks.create({
     account: accountId,
     refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/onboarding`,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/dashboard`,
+    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/dashboard?stripe_onboarding=success`,
     type: 'account_onboarding',
   })
 }
@@ -44,10 +54,11 @@ export async function createBookingCheckoutSession({
 }) {
   // Direct charge: the session is created on the connected (teacher) account
   // itself via the `stripeAccount` request option, so the customer pays the
-  // teacher's account directly (and Stripe's processing fee is deducted from
-  // their balance, matching this account's fees_collector: account setting).
-  // `application_fee_amount` is the platform's cut, automatically pulled
-  // from that same balance into the platform's account.
+  // teacher's account directly (Stripe's processing fee is deducted from
+  // their balance automatically). `application_fee_amount` is the platform's
+  // cut, pulled from that same balance into the platform's account — sized
+  // so the teacher still ends up with their full base rate after Stripe's
+  // fee (see lib/pricing.ts).
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
@@ -55,7 +66,7 @@ export async function createBookingCheckoutSession({
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: 'gbp',
             product_data: {
               name: 'Lesson booking',
               description: `Booking ${bookingId}`,
@@ -68,6 +79,7 @@ export async function createBookingCheckoutSession({
       payment_intent_data: {
         application_fee_amount: applicationFeeAmount,
       },
+      metadata: { bookingId },
       success_url: successUrl,
       cancel_url: cancelUrl,
     },
@@ -81,6 +93,19 @@ export async function createBookingCheckoutSession({
     sessionId: session.id,
     paymentIntent: session.payment_intent as string,
   }
+}
+
+/** Pays out a specific amount from a teacher's connected-account balance to their bank account. */
+export async function payoutToTeacherAccount(teacherAccountId: string, amount: number) {
+  return stripe.payouts.create(
+    {
+      amount,
+      currency: 'gbp',
+    },
+    {
+      stripeAccount: teacherAccountId,
+    }
+  )
 }
 
 export function constructStripeEvent(payload: string, signature: string, secret: string) {

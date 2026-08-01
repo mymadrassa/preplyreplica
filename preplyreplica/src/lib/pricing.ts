@@ -1,61 +1,44 @@
 const PLATFORM_COMMISSION_RATE = 0.40 // platform keeps 40% of the teacher's base rate
-const STRIPE_PERCENTAGE_FEE = 0.029    // Stripe US card rate: 2.9%
-const STRIPE_FIXED_FEE = 0.30          // + $0.30 fixed
-const STUDENT_STRIPE_FEE_SHARE = 0.5   // student absorbs 50% of the Stripe fee
-const TEACHER_STRIPE_FEE_SHARE = 0.5   // teacher absorbs 50% of the Stripe fee
+const STRIPE_PERCENTAGE_FEE = 0.015    // Stripe UK/EEA card rate: 1.5%
+const STRIPE_FIXED_FEE = 0.20          // + £0.20 fixed
 
 export interface PricingBreakdown {
   teacherRate: number
   durationHours: number
   baseAmount: number
   platformCommission: number
-  subtotal: number
-  estimatedStripeFee: number
-  studentStripeFee: number
-  teacherStripeFee: number
   totalStudentPays: number
+  estimatedStripeFee: number
   teacherReceives: number
-  platformNetRevenue: number
-  currency: 'usd'
+  currency: 'gbp'
 }
 
 /**
- * Computes the full pricing breakdown for a booking. All amounts are in
- * dollars; use toPence() to convert to the integer cents Stripe expects.
+ * Computes the per-booking pricing breakdown. All amounts are in pounds;
+ * use toPence() to convert to the integer pence Stripe expects.
  *
- * Model: the platform adds a 40% commission on top of the teacher's base
- * rate, then Stripe's processing fee on the resulting subtotal is split
- * evenly between student and teacher (nobody absorbs it on the platform's
- * behalf). Netting it out, the platform's actual revenue always equals the
- * commission alone — the Stripe fee split is a wash on the platform's side.
+ * Policy: the teacher always receives their full base rate — they never
+ * absorb any part of the Stripe processing fee. The platform keeps a 40%
+ * commission. The Stripe fee itself is not charged per-transaction to
+ * either party; it's tracked separately (see profiles.pending_stripe_fees)
+ * and billed to the student on their next booking instead.
  */
 export function calculatePricing(teacherRate: number, durationHours: number): PricingBreakdown {
   const baseAmount = round2(teacherRate * durationHours)
   const platformCommission = round2(baseAmount * PLATFORM_COMMISSION_RATE)
-  const subtotal = round2(baseAmount + platformCommission)
-
-  const estimatedStripeFee = round2(subtotal * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE)
-
-  const studentStripeFee = round2(estimatedStripeFee * STUDENT_STRIPE_FEE_SHARE)
-  const teacherStripeFee = round2(estimatedStripeFee * TEACHER_STRIPE_FEE_SHARE)
-
-  const totalStudentPays = round2(subtotal + studentStripeFee)
-  const teacherReceives = round2(baseAmount - teacherStripeFee)
-  const platformNetRevenue = round2(totalStudentPays - teacherReceives - estimatedStripeFee)
+  const totalStudentPays = round2(baseAmount + platformCommission)
+  const estimatedStripeFee = round2(totalStudentPays * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE)
+  const teacherReceives = baseAmount
 
   return {
     teacherRate,
     durationHours,
     baseAmount,
     platformCommission,
-    subtotal,
-    estimatedStripeFee,
-    studentStripeFee,
-    teacherStripeFee,
     totalStudentPays,
+    estimatedStripeFee,
     teacherReceives,
-    platformNetRevenue,
-    currency: 'usd',
+    currency: 'gbp',
   }
 }
 

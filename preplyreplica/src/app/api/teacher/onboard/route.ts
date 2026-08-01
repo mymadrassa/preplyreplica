@@ -32,19 +32,25 @@ export async function POST(request: Request) {
 
   const { data: existing } = await supabase.from('teacher_profiles').select('*').eq('id', userId).single()
 
+  // Only send the teacher through Stripe's setup flow if it isn't already
+  // complete — otherwise editing your profile after approval would bounce
+  // you into "reconnect your bank account" every single time.
   let stripeAccountId = existing?.stripe_account_id || null
-  let accountLink
-  try {
-    if (!stripeAccountId) {
-      const account = await createTeacherConnectAccount(session.data!.session!.user!.email || '')
-      stripeAccountId = account.id
+  let onboardingUrl: string | null = null
+  if (!existing?.stripe_charges_enabled) {
+    try {
+      if (!stripeAccountId) {
+        const account = await createTeacherConnectAccount(session.data!.session!.user!.email || '')
+        stripeAccountId = account.id
+      }
+      const accountLink = await createTeacherConnectAccountLink(stripeAccountId)
+      onboardingUrl = accountLink.url
+    } catch (stripeError: any) {
+      return NextResponse.json(
+        { error: stripeError?.raw?.message || stripeError?.message || 'Unable to set up Stripe payouts for this account.' },
+        { status: 502 }
+      )
     }
-    accountLink = await createTeacherConnectAccountLink(stripeAccountId)
-  } catch (stripeError: any) {
-    return NextResponse.json(
-      { error: stripeError?.raw?.message || stripeError?.message || 'Unable to set up Stripe payouts for this account.' },
-      { status: 502 }
-    )
   }
 
   const { error } = await supabase.from('teacher_profiles').upsert({
@@ -57,7 +63,10 @@ export async function POST(request: Request) {
     hourly_rate,
     video_url: video_url || null,
     stripe_account_id: stripeAccountId,
-    status: 'pending',
+    // Preserve the existing review status when editing — only brand-new
+    // profiles start at 'pending'. Editing your bio shouldn't silently
+    // un-approve an already-approved teacher.
+    status: existing?.status || 'pending',
     updated_at: new Date().toISOString(),
   })
 
@@ -71,5 +80,5 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json({ onboardingUrl: accountLink.url })
+  return NextResponse.json({ onboardingUrl })
 }
