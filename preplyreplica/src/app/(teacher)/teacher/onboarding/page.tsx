@@ -1,4 +1,5 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/onboarding/page.tsx
+import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { TeacherOnboardingForm } from '@/components/TeacherOnboardingForm'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -8,6 +9,10 @@ export default async function TeacherOnboardingPage() {
   const supabase = createServerClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
+
+  if (!userId) {
+    redirect('/auth/login')
+  }
 
   const { data: profile } = await supabase
     .from('teacher_profiles')

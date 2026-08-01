@@ -55,7 +55,6 @@ export async function POST(request: Request) {
 
   const { error } = await supabase.from('teacher_profiles').upsert({
     id: userId,
-    user_id: userId,
     headline,
     bio,
     languages,

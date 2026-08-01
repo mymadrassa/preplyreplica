@@ -1,5 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/dashboard/page.tsx
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { AlertTriangle, CalendarClock, CalendarPlus, CalendarX2, ClipboardCheck, Pencil, Star, Video, Wallet } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
@@ -14,6 +15,10 @@ export default async function TeacherDashboardPage({
   const supabase = createServerClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
+
+  if (!userId) {
+    redirect('/auth/login')
+  }
 
   const [{ data: teacher }, { data: bookings }] = await Promise.all([
     supabase.from('teacher_profiles').select('*, profiles(*)').eq('id', userId).single(),

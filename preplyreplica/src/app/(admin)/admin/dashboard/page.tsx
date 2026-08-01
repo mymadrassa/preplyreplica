@@ -36,7 +36,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     .from('teacher_profiles')
     .select('*, profiles(*), teacher_documents(*)')
     .order('created_at', { ascending: false })
-  if (status) query = query.eq('status', status)
+  if (status) query = query.eq('status', status as 'pending' | 'approved' | 'rejected' | 'suspended')
   if (from) query = query.gte('created_at', from)
   if (to) query = query.lte('created_at', `${to}T23:59:59`)
 
