@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { PasswordInput } from '@/components/PasswordInput'
+import { FormMessage } from '@/components/FormMessage'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -48,7 +49,7 @@ export default function ResetPasswordPage() {
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
         <PasswordInput label="New password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
         <PasswordInput label="Confirm new password" name="confirmPassword" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {error ? <FormMessage type="error">{error}</FormMessage> : null}
         <Button type="submit" loading={loading}>Update password</Button>
       </form>
     </main>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { MailCheck } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
@@ -38,9 +39,12 @@ export default function ForgotPasswordPage() {
         <p className="mt-3 text-slate-600">Enter your email and we'll send you a link to reset it.</p>
       </div>
       {sent ? (
-        <p className="mt-10 text-center text-slate-700">
-          If an account exists for <strong>{email}</strong>, a reset link has been sent. Check your inbox.
-        </p>
+        <div className="mt-10 flex flex-col items-center gap-3 text-center text-slate-700">
+          <MailCheck className="h-8 w-8 text-brand-600" aria-hidden="true" />
+          <p>
+            If an account exists for <strong>{email}</strong>, a reset link has been sent. Check your inbox.
+          </p>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
           <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />

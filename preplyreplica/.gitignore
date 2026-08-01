@@ -14,3 +14,8 @@ package-lock.json
 **/*.log
 .env
 .env.local.example
+test-results
+playwright-report
+blob-report
+playwright/.cache
+e2e/.fixtures.json

@@ -1,5 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(admin)/dashboard/page.tsx
 import Link from 'next/link'
+import { CalendarCheck, Search, UserCog, Users as UsersIcon } from 'lucide-react'
 import type { Database } from '@/types/database'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
@@ -91,20 +92,23 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       </div>
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
-          <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Pending teachers</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{pendingCount ?? 0}</p>
+          <UserCog className="h-5 w-5 text-brand-600" aria-hidden="true" />
+          <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Pending teachers</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{pendingCount ?? 0}</p>
         </Card>
         <Card>
-          <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Total bookings</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{bookingCount ?? 0}</p>
+          <CalendarCheck className="h-5 w-5 text-brand-600" aria-hidden="true" />
+          <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Total bookings</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{bookingCount ?? 0}</p>
         </Card>
         <Card>
-          <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Users</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{totalUsers}</p>
+          <UsersIcon className="h-5 w-5 text-brand-600" aria-hidden="true" />
+          <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Users</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{totalUsers}</p>
         </Card>
       </div>
 
-      <form method="get" className="mt-10 grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
+      <form method="get" className="mt-10 grid gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card sm:grid-cols-2 lg:grid-cols-5">
         <div className="sm:col-span-2 lg:col-span-2">
           <Input label="Search" name="q" defaultValue={q} placeholder="Name, email, headline, subject..." />
         </div>
@@ -124,11 +128,14 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         <Input label="To" name="to" type="date" defaultValue={to} />
         <div className="flex items-end justify-end gap-3 sm:col-span-2 lg:col-span-5">
           {hasActiveFilters ? (
-            <Link href="/admin/dashboard" className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">
+            <Link href="/admin/dashboard" className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-px hover:border-slate-300 hover:shadow-sm">
               Clear filters
             </Link>
           ) : null}
-          <Button type="submit">Search</Button>
+          <Button type="submit">
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Search
+          </Button>
         </div>
       </form>
 

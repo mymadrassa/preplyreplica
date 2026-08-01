@@ -41,13 +41,13 @@ export function AdminTeacherCard({ teacher }: any) {
   }
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm" data-testid={`admin-teacher-card-${teacher.id}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-lg font-semibold text-slate-900">{teacher.profiles?.full_name || teacher.profiles?.email || 'Teacher'}</p>
           <p className="text-slate-600">{teacher.headline}</p>
           <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">
-            Submitted {teacher.created_at ? new Date(teacher.created_at).toLocaleDateString() : 'unknown date'}
+            Submitted {teacher.created_at ? new Date(teacher.created_at).toLocaleDateString('en-GB') : 'unknown date'}
           </p>
         </div>
         <div className="flex items-center gap-3">

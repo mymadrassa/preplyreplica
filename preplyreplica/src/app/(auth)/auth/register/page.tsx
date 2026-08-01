@@ -32,6 +32,16 @@ export default function RegisterPage() {
       return
     }
 
+    // Supabase deliberately returns no error when the email already belongs
+    // to a confirmed account (anti-enumeration) — it returns a user object
+    // with an empty `identities` array instead. Without this check the flow
+    // falls through as if a brand-new signup succeeded.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setError('An account with this email already exists. Please log in instead.')
+      setLoading(false)
+      return
+    }
+
     if (data.user) {
       const profile: Database['public']['Tables']['profiles']['Insert'] = {
         id: data.user.id,

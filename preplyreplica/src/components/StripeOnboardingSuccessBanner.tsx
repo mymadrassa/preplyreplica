@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 
 export function StripeOnboardingSuccessBanner() {
   useEffect(() => {
@@ -14,7 +15,8 @@ export function StripeOnboardingSuccessBanner() {
   }, [])
 
   return (
-    <div className="mb-8 rounded-3xl border border-sky-300 bg-sky-50 p-6">
+    <div className="mb-8 flex items-start gap-3 rounded-2xl border border-sky-300 bg-sky-50 p-6">
+      <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-sky-600" aria-hidden="true" />
       <p className="text-sky-900">
         <strong>Stripe setup complete!</strong> Your payout account is ready — once your profile is approved, you'll be able to accept bookings.
       </p>
