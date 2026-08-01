@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
+import type { Database } from '@/types/database'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -65,8 +66,11 @@ export default function RegisterPage() {
         return
       }
 
-    if (data.session) {
-      router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
+      if (data.session) {
+        router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
+      } else {
+        setLoading(false)
+      }
     } else {
       setLoading(false)
     }
