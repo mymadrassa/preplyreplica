@@ -1,7 +1,7 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/types/database.ts
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       profiles: {
@@ -34,6 +34,7 @@ export interface Database {
           pending_stripe_fees?: number
           created_at?: string
         }
+        Relationships: []
       }
       teacher_profiles: {
         Row: {
@@ -83,6 +84,15 @@ export interface Database {
           rating_count?: number
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'teacher_profiles_id_fkey'
+            columns: ['id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       teacher_documents: {
         Row: {
@@ -102,6 +112,15 @@ export interface Database {
           bucket_path?: string
           uploaded_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'teacher_documents_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       availability_slots: {
         Row: {
@@ -127,6 +146,15 @@ export interface Database {
           end_time?: string
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'availability_slots_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       availability_exceptions: {
         Row: {
@@ -155,6 +183,15 @@ export interface Database {
           exception_type?: 'blocked' | 'added'
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'availability_exceptions_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       bookings: {
         Row: {
@@ -225,6 +262,22 @@ export interface Database {
           reminder_sent_at?: string | null
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'bookings_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'bookings_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       payments: {
         Row: {
@@ -271,6 +324,15 @@ export interface Database {
           status?: string
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'payments_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: false
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          }
+        ]
       }
       reviews: {
         Row: {
@@ -299,6 +361,29 @@ export interface Database {
           comment?: string | null
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'reviews_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: false
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'reviews_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'reviews_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
     }
     Views: {}
