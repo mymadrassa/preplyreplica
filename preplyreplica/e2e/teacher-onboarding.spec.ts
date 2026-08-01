@@ -21,7 +21,7 @@ test.describe('Teacher onboarding page', () => {
     await loginAs(page, 'teacher')
     await page.goto('/teacher/onboarding')
     await expect(page.getByLabel('Headline')).toHaveValue('E2E seeded teacher profile')
-    await expect(page.getByLabel('Bio')).toHaveValue(/created by the automated end-to-end test suite/)
+    await expect(page.getByRole('textbox', { name: 'Bio', exact: true })).toHaveValue(/created by the automated end-to-end test suite/)
     // Languages/subjects are checkbox chips, not a single value-bearing
     // input. "English" is also a subject option — .first() targets the
     // Languages section, which renders first in the DOM.
