@@ -7,6 +7,11 @@ import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { TextArea } from '@/components/TextArea'
 import { FormMessage } from '@/components/FormMessage'
+import { SUBJECTS, LANGUAGES } from '@/lib/constants'
+
+function toggleValue(list: string[], value: string) {
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
+}
 
 export function TeacherOnboardingForm({ existingProfile }: any) {
   const supabase = createBrowserClient()
