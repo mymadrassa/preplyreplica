@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
-import { Select } from '@/components/Select'
 import { TextArea } from '@/components/TextArea'
 import { FormMessage } from '@/components/FormMessage'
 
@@ -13,8 +12,8 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
   const supabase = createBrowserClient()
   const [headline, setHeadline] = useState(existingProfile?.headline || '')
   const [bio, setBio] = useState(existingProfile?.bio || '')
-  const [languages, setLanguages] = useState((existingProfile?.languages || ['English']).join(','))
-  const [subjects, setSubjects] = useState((existingProfile?.subjects || ['English']).join(','))
+  const [languages, setLanguages] = useState<string[]>(existingProfile?.languages || ['English'])
+  const [subjects, setSubjects] = useState<string[]>(existingProfile?.subjects || [])
   const [hourlyRate, setHourlyRate] = useState(existingProfile?.hourly_rate?.toString() || '25')
   const [videoUrl, setVideoUrl] = useState(existingProfile?.video_url || '')
   const [documents, setDocuments] = useState<FileList | null>(null)
@@ -44,6 +43,12 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
     event.preventDefault()
     setError('')
     setSuccess('')
+
+    if (languages.length === 0 || subjects.length === 0) {
+      setError('Select at least one language and one subject.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -54,8 +59,8 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
         body: JSON.stringify({
           headline,
           bio,
-          languages: languages.split(',').map((item) => item.trim()).filter(Boolean),
-          subjects: subjects.split(',').map((item) => item.trim()).filter(Boolean),
+          languages,
+          subjects,
           hourly_rate: Number(hourlyRate),
           video_url: videoUrl,
           document_paths: documentPaths,
@@ -86,12 +91,69 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
     <form onSubmit={handleSubmit} className="space-y-5">
       <Input label="Headline" name="headline" value={headline} onChange={(event) => setHeadline(event.target.value)} required />
       <TextArea label="Bio" name="bio" rows={5} value={bio} onChange={(event) => setBio(event.target.value)} required />
-      <Input label="Languages" name="languages" value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="English, Spanish" required />
-      <Input label="Subjects" name="subjects" value={subjects} onChange={(event) => setSubjects(event.target.value)} placeholder="Math, Physics" required />
-      <Input label="Hourly rate" name="hourlyRate" type="number" min={10} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
-      <Input label="Video URL" name="videoUrl" type="url" value={videoUrl} onChange={(event) => setVideoUrl(event.target.value)} />
       <div>
-        <label className="block text-sm font-medium text-slate-700">Upload documents</label>
+        <span className="block text-sm font-medium text-slate-700">Languages</span>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {LANGUAGES.map((item) => (
+            <label
+              key={item}
+              className={`cursor-pointer rounded-full border px-4 py-2 text-sm transition ${
+                languages.includes(item)
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={languages.includes(item)}
+                onChange={() => setLanguages((current) => toggleValue(current, item))}
+              />
+              {item}
+            </label>
+          ))}
+        </div>
+        {languages.length === 0 ? <p className="mt-2 text-xs text-red-600">Select at least one language.</p> : null}
+      </div>
+      <div>
+        <span className="block text-sm font-medium text-slate-700">Subjects</span>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {SUBJECTS.map((item) => (
+            <label
+              key={item}
+              className={`cursor-pointer rounded-full border px-4 py-2 text-sm transition ${
+                subjects.includes(item)
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={subjects.includes(item)}
+                onChange={() => setSubjects((current) => toggleValue(current, item))}
+              />
+              {item}
+            </label>
+          ))}
+        </div>
+        {subjects.length === 0 ? <p className="mt-2 text-xs text-red-600">Select at least one subject.</p> : null}
+      </div>
+      <Input label="Hourly rate" name="hourlyRate" type="number" min={10} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
+      <Input
+        label="Intro video URL (optional)"
+        name="videoUrl"
+        type="url"
+        value={videoUrl}
+        onChange={(event) => setVideoUrl(event.target.value)}
+        placeholder="https://www.youtube.com/embed/..."
+      />
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Verification documents (optional)</label>
+        <p className="mt-1 text-xs text-slate-500">
+          A government-issued ID and any teaching certificates or diplomas you have. Our team uses these to verify your
+          identity and qualifications before approving your profile — they are never shown publicly. PDF or image files.
+        </p>
         <input type="file" accept="application/pdf,image/*" multiple onChange={(event) => setDocuments(event.target.files)} className="mt-2 w-full text-sm text-slate-700" />
       </div>
       {error ? <FormMessage type="error">{error}</FormMessage> : null}
