@@ -1,6 +1,7 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { ChevronLeft, ChevronRight, LayoutGrid, Rows3 } from 'lucide-react'
 import { WEEKDAY_LABELS } from '@/lib/constants'
 
@@ -17,6 +18,9 @@ type Booking = {
 
 const DISPLAY_START_HOUR = 6
 const DISPLAY_END_HOUR = 23
+const ROW_HEIGHT_PX = 48
+const TOTAL_MINUTES = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * 60
+const TOTAL_HEIGHT_PX = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * ROW_HEIGHT_PX
 const CANCELLED_STATUSES = new Set(['cancelled', 'rejected'])
 
 function toMinutes(time: string) {
@@ -26,6 +30,18 @@ function toMinutes(time: string) {
 
 function overlaps(rangeStart: number, rangeEnd: number, blockStart: number, blockEnd: number) {
   return rangeStart < blockEnd && rangeEnd > blockStart
+}
+
+function minutesToPx(minutesSinceStart: number) {
+  return (minutesSinceStart / TOTAL_MINUTES) * TOTAL_HEIGHT_PX
+}
+
+function formatTime(minutesSinceMidnight: number) {
+  const hours24 = Math.floor(minutesSinceMidnight / 60)
+  const minutes = Math.round(minutesSinceMidnight % 60)
+  const period = hours24 < 12 ? 'AM' : 'PM'
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12
+  return `${hours12}:${String(minutes).padStart(2, '0')} ${period}`
 }
 
 function dateKey(date: Date) {
@@ -39,12 +55,7 @@ function startOfWeek(date: Date) {
   return monday
 }
 
-function dayStatus(
-  date: Date,
-  slots: Slot[],
-  exceptions: Exception[],
-  bookings: Booking[]
-): { availableRanges: [number, number][]; blockedAllDay: boolean; bookingsToday: Booking[] } {
+function dayStatus(date: Date, slots: Slot[], exceptions: Exception[], bookings: Booking[]) {
   const key = dateKey(date)
   const weekday = date.getDay()
   const dayException = exceptions.find((exception) => exception.exception_date === key)
@@ -74,6 +85,13 @@ function dayStatus(
 export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: Slot[]; exceptions: Exception[]; bookings: Booking[] }) {
   const [view, setView] = useState<'week' | 'month'>('week')
   const [anchor, setAnchor] = useState(() => new Date())
+  const [now, setNow] = useState(() => new Date())
+  const [hoverMinutes, setHoverMinutes] = useState<number | null>(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(interval)
+  }, [])
 
   const weekStart = useMemo(() => startOfWeek(anchor), [anchor])
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => {
@@ -119,10 +137,20 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
     })
   }
 
+  function handleGridMouseMove(event: React.MouseEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const y = event.clientY - rect.top
+    const minutesSinceStart = (y / TOTAL_HEIGHT_PX) * TOTAL_MINUTES
+    setHoverMinutes(Math.min(Math.max(minutesSinceStart, 0), TOTAL_MINUTES))
+  }
+
   const rangeLabel =
     view === 'week'
       ? `${weekDays[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${weekDays[6].toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
       : anchor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  const nowMinutesSinceStart = (now.getHours() * 60 + now.getMinutes()) - DISPLAY_START_HOUR * 60
+  const showNowLine = nowMinutesSinceStart >= 0 && nowMinutesSinceStart <= TOTAL_MINUTES
 
   return (
     <div>
@@ -159,64 +187,91 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
 
       {view === 'week' ? (
         <div className="overflow-x-auto">
-          <div className="grid min-w-[720px] grid-cols-[4rem_repeat(7,1fr)] gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200">
-            <div className="bg-white" />
+          <div className="grid min-w-[720px] grid-cols-[4rem_repeat(7,1fr)]">
+            <div />
             {weekDays.map((date) => (
-              <div key={date.toISOString()} className="bg-white px-2 py-3 text-center">
+              <div key={date.toISOString()} className={`border-b border-slate-200 px-2 py-3 text-center ${dateKey(date) === dateKey(now) ? 'bg-brand-50' : ''}`}>
                 <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{WEEKDAY_LABELS[date.getDay()].slice(0, 3)}</p>
                 <p className="text-sm font-semibold text-slate-900">{date.getDate()}</p>
               </div>
             ))}
 
-            {hours.map((hour) => (
-              <Fragment key={hour}>
-                <div className="bg-white px-2 py-3 text-right text-xs text-slate-400">
+            <div className="relative" style={{ height: TOTAL_HEIGHT_PX }}>
+              {hours.map((hour) => (
+                <div key={hour} className="absolute inset-x-0 -translate-y-1/2 text-right text-xs text-slate-400" style={{ top: minutesToPx((hour - DISPLAY_START_HOUR) * 60) }}>
                   {hour % 12 === 0 ? 12 : hour % 12}{hour < 12 ? 'am' : 'pm'}
                 </div>
-                {weekDays.map((date) => {
-                  const cellStart = hour * 60
-                  const cellEnd = cellStart + 60
-                  const { availableRanges, blockedAllDay, bookingsToday } = dayStatus(date, slots, exceptions, bookings)
+              ))}
+              {hoverMinutes !== null ? (
+                <div className="absolute inset-x-0 -translate-y-1/2 text-right text-xs font-semibold text-brand-600" style={{ top: minutesToPx(hoverMinutes) }}>
+                  {formatTime(hoverMinutes + DISPLAY_START_HOUR * 60)}
+                </div>
+              ) : null}
+            </div>
 
-                  const isAvailable = availableRanges.some(([start, end]) => overlaps(cellStart, cellEnd, start, end))
-                  const booking = bookingsToday.find((b) => {
-                    const start = new Date(b.start_at)
-                    const end = new Date(b.end_at)
-                    return overlaps(cellStart, cellEnd, start.getHours() * 60 + start.getMinutes(), end.getHours() * 60 + end.getMinutes())
-                  })
+            {weekDays.map((date) => {
+              const isToday = dateKey(date) === dateKey(now)
+              const { availableRanges, blockedAllDay, bookingsToday } = dayStatus(date, slots, exceptions, bookings)
 
-                  const tooltip = booking
-                    ? `Booked: ${booking.subject} with ${booking.profiles?.full_name || booking.profiles?.email || 'student'}`
-                    : isAvailable
-                    ? 'Available for booking'
-                    : blockedAllDay
-                    ? 'Blocked — you marked this day unavailable'
-                    : undefined
+              return (
+                <div
+                  key={dateKey(date)}
+                  className="relative border-l border-slate-100 first:border-l-0"
+                  style={{ height: TOTAL_HEIGHT_PX }}
+                  onMouseMove={handleGridMouseMove}
+                  onMouseLeave={() => setHoverMinutes(null)}
+                >
+                  {hours.map((hour) => (
+                    <div key={hour} className="absolute inset-x-0 border-t border-slate-100" style={{ top: minutesToPx((hour - DISPLAY_START_HOUR) * 60) }} />
+                  ))}
 
-                  return (
+                  {blockedAllDay ? (
                     <div
-                      key={`${dateKey(date)}-${hour}`}
-                      title={tooltip}
-                      className={`min-h-[2.5rem] px-1 py-1 text-[11px] leading-tight ${tooltip ? 'cursor-help' : ''} ${
-                        booking
-                          ? 'bg-brand-600 text-white'
-                          : isAvailable
-                          ? 'bg-emerald-200'
-                          : blockedAllDay
-                          ? 'bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)]'
-                          : 'bg-white'
-                      }`}
-                    >
-                      {booking ? (
-                        <span className="line-clamp-2 font-medium">
-                          {booking.subject} · {booking.profiles?.full_name || booking.profiles?.email || 'Student'}
-                        </span>
-                      ) : null}
+                      className="absolute inset-0 cursor-help bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)]"
+                      title="Blocked — you marked this day unavailable"
+                    />
+                  ) : (
+                    availableRanges.map(([start, end], i) => (
+                      <div
+                        key={i}
+                        className="absolute inset-x-0.5 cursor-help rounded-md bg-emerald-200 ring-1 ring-inset ring-emerald-400"
+                        style={{ top: minutesToPx(start - DISPLAY_START_HOUR * 60), height: minutesToPx(end - start) }}
+                        title="Available for booking"
+                      />
+                    ))
+                  )}
+
+                  {bookingsToday.map((booking) => {
+                    const start = new Date(booking.start_at)
+                    const end = new Date(booking.end_at)
+                    const startMinutes = start.getHours() * 60 + start.getMinutes() - DISPLAY_START_HOUR * 60
+                    const endMinutes = end.getHours() * 60 + end.getMinutes() - DISPLAY_START_HOUR * 60
+                    const studentName = booking.profiles?.full_name || booking.profiles?.email || 'Student'
+                    return (
+                      <Link
+                        key={booking.id}
+                        href={`/session/${booking.id}`}
+                        title={`Join session: ${booking.subject} with ${studentName} — click to open`}
+                        className="absolute inset-x-0.5 cursor-pointer overflow-hidden rounded-md bg-brand-600 px-1.5 py-1 text-[11px] leading-tight text-white shadow-sm transition-colors hover:bg-brand-700"
+                        style={{ top: minutesToPx(startMinutes), height: Math.max(minutesToPx(endMinutes - startMinutes), 20) }}
+                      >
+                        <span className="line-clamp-2 font-medium">{booking.subject} · {studentName}</span>
+                      </Link>
+                    )
+                  })}
+
+                  {isToday && showNowLine ? (
+                    <div className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-red-500" style={{ top: minutesToPx(nowMinutesSinceStart) }}>
+                      <span className="absolute -left-1 -top-[5px] h-2.5 w-2.5 rounded-full bg-red-500" />
                     </div>
-                  )
-                })}
-              </Fragment>
-            ))}
+                  ) : null}
+
+                  {hoverMinutes !== null ? (
+                    <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-slate-400" style={{ top: minutesToPx(hoverMinutes) }} />
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
         </div>
       ) : (
@@ -230,7 +285,7 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
             const inCurrentMonth = date.getMonth() === anchor.getMonth()
             const { availableRanges, blockedAllDay, bookingsToday } = dayStatus(date, slots, exceptions, bookings)
             const hasAvailability = availableRanges.length > 0
-            const isToday = dateKey(date) === dateKey(new Date())
+            const isToday = dateKey(date) === dateKey(now)
 
             return (
               <button
@@ -273,8 +328,9 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-600">
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-200 ring-1 ring-inset ring-emerald-400" /> Available</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-brand-600" /> Booked session</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-brand-600" /> Booked session (click to join)</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)] ring-1 ring-inset ring-slate-300" /> Blocked</span>
+        <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-red-500" /> Current time</span>
       </div>
     </div>
   )
