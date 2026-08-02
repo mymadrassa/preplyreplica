@@ -7,9 +7,10 @@ const COMPLETION_GRACE_HOURS = 24
 // Auto-completes bookings whose session ended more than 24h ago (giving
 // students a window to report a no-show/issue before the teacher is paid
 // out), then releases that booking's payout from the teacher's Stripe
-// balance to their bank account. Called periodically (hourly) by Vercel
-// Cron (see vercel.json), which sends a GET request with an
-// `Authorization: Bearer $CRON_SECRET` header automatically attached.
+// balance to their bank account. Called once daily by Vercel Cron (see
+// vercel.json — the Hobby plan doesn't allow more frequent schedules),
+// which sends a GET request with an `Authorization: Bearer $CRON_SECRET`
+// header automatically attached.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get('authorization')

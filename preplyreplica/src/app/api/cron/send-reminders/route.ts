@@ -5,7 +5,9 @@ import { sendBookingReminderEmail } from '@/lib/email'
 const REMINDER_LEAD_MINUTES = 60
 
 // Sends a "starts in ~1h" reminder email to both student and teacher, once
-// per booking. Called every 15 minutes by Vercel Cron (see vercel.json).
+// per booking. Triggered every 15 minutes by an external scheduler (not
+// Vercel Cron — the free Hobby plan only allows once-daily cron schedules,
+// too coarse for a precise hour-before reminder).
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get('authorization')
