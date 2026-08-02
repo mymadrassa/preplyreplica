@@ -5,6 +5,7 @@ import { BookingForm } from '@/components/BookingForm'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RatingStars } from '@/components/RatingStars'
+import { WEEKDAY_LABELS } from '@/lib/constants'
 
 interface TeacherPageProps {
   params: {
@@ -85,7 +86,7 @@ export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
             {teacher.availability_slots?.length ? (
               teacher.availability_slots.map((slot) => (
                 <div key={slot.id} className="rounded-2xl bg-slate-50 p-4">
-                  <p className="font-semibold">Weekday {slot.weekday}</p>
+                  <p className="font-semibold">{WEEKDAY_LABELS[slot.weekday]}</p>
                   <p>{slot.start_time} – {slot.end_time}</p>
                 </div>
               ))
