@@ -5,6 +5,7 @@
 -- being able to see a teacher's real availability, so add a public-read
 -- policy scoped the same way teacher_profiles already is — visible once
 -- the teacher is approved, in addition to the existing owner/admin access.
+drop policy if exists availability_slots_select on public.availability_slots;
 create policy availability_slots_select on public.availability_slots
   for select
   using (
@@ -16,6 +17,7 @@ create policy availability_slots_select on public.availability_slots
     )
   );
 
+drop policy if exists availability_exceptions_select on public.availability_exceptions;
 create policy availability_exceptions_select on public.availability_exceptions
   for select
   using (
