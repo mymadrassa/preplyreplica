@@ -8,6 +8,9 @@ import { Input } from '@/components/Input'
 import { TextArea } from '@/components/TextArea'
 import { StatusBadge } from '@/components/StatusBadge'
 import { SubmitButton } from '@/components/SubmitButton'
+import { CancelBookingButton } from '@/components/CancelBookingButton'
+
+const CANCELLATION_CUTOFF_HOURS = 12
 
 async function submitReview(formData: FormData) {
   'use server'
@@ -57,7 +60,11 @@ export default async function StudentBookingsPage() {
       </div>
       <div className="grid gap-6">
         {bookings?.length ? (
-          bookings.map((booking) => (
+          bookings.map((booking) => {
+            const hoursUntilStart = (new Date(booking.start_at).getTime() - Date.now()) / (60 * 60 * 1000)
+            const canCancel = booking.status === 'confirmed' && hoursUntilStart >= CANCELLATION_CUTOFF_HOURS
+
+            return (
             <Card key={booking.id}>
               <div className="space-y-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
@@ -70,6 +77,11 @@ export default async function StudentBookingsPage() {
                     <div className="mt-1">
                       <StatusBadge status={booking.status} />
                     </div>
+                    {booking.status === 'pending' ? (
+                      <p className="mt-1 max-w-xs text-xs text-slate-500">
+                        Your payment is authorized but not charged yet — waiting on the teacher to approve this request.
+                      </p>
+                    ) : null}
                     {booking.status === 'confirmed' ? (
                       <div className="mt-2 flex flex-col items-end gap-1">
                         <Link href={`/session/${booking.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline">
@@ -80,6 +92,13 @@ export default async function StudentBookingsPage() {
                           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
                           Add to calendar
                         </a>
+                        {canCancel ? (
+                          <CancelBookingButton bookingId={booking.id} />
+                        ) : (
+                          <p className="mt-1 max-w-xs text-xs text-slate-400">
+                            This lesson starts in less than {CANCELLATION_CUTOFF_HOURS} hours and can no longer be cancelled.
+                          </p>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -97,7 +116,8 @@ export default async function StudentBookingsPage() {
                 ) : null}
               </div>
             </Card>
-          ))
+            )
+          })
         ) : (
           <Card>
             <div className="flex items-center gap-3 text-slate-600">

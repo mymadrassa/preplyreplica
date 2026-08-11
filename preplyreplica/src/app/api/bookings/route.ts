@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { createBookingCheckoutSession } from '@/lib/stripe'
 import { calculatePricing, toPence } from '@/lib/pricing'
+import { isRangeFree } from '@/lib/availability'
 
 const bookingSchema = z.object({
   teacherId: z.string().uuid(),
@@ -39,6 +40,32 @@ export async function POST(request: Request) {
   const startDate = new Date(startAt)
   const endDate = new Date(startDate.getTime() + duration * 60000)
 
+  // Re-validate against the teacher's real availability server-side —
+  // the picker UI only shows open slots, but never trust that alone: the
+  // slot could have been taken by someone else, or blocked, between the
+  // student loading the page and submitting this request.
+  const dayKey = startDate.toISOString().slice(0, 10)
+  const [{ data: daySlots }, { data: dayExceptions }, { data: dayBookings }] = await Promise.all([
+    supabase.from('availability_slots').select('weekday, start_time, end_time').eq('teacher_id', teacherId),
+    supabase
+      .from('availability_exceptions')
+      .select('exception_date, start_time, end_time, exception_type')
+      .eq('teacher_id', teacherId)
+      .eq('exception_date', dayKey),
+    supabase
+      .from('bookings')
+      .select('start_at, end_at, status')
+      .eq('teacher_id', teacherId)
+      .gte('start_at', `${dayKey}T00:00:00`)
+      .lte('start_at', `${dayKey}T23:59:59`),
+  ])
+
+  const startMinutes = startDate.getHours() * 60 + startDate.getMinutes()
+  const slotIsFree = isRangeFree(startDate, startMinutes, startMinutes + duration, daySlots || [], dayExceptions || [], dayBookings || [])
+  if (!slotIsFree) {
+    return NextResponse.json({ error: 'That time is no longer available. Please pick another slot.' }, { status: 409 })
+  }
+
   // Teacher always nets their full base rate. The commission funds the
   // platform's cut; Stripe's real processing fee (deducted automatically
   // from the teacher's connected-account balance under direct charges) is
@@ -59,7 +86,12 @@ export async function POST(request: Request) {
     duration,
     start_at: startDate.toISOString(),
     end_at: endDate.toISOString(),
-    status: 'pending',
+    // Holds the slot the instant checkout starts — this status (plus
+    // 'pending' and 'confirmed') is what future availability checks treat
+    // as occupied, so a second student can't book the same slot while this
+    // one is mid-checkout. Moves to 'pending' once payment is authorized
+    // (see the webhook), then 'confirmed' once the teacher approves.
+    status: 'pending_payment',
   }).select().single()
 
   if (bookingError || !booking) {

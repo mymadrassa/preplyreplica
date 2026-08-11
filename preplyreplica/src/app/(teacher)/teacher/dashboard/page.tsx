@@ -6,6 +6,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StripeOnboardingSuccessBanner } from '@/components/StripeOnboardingSuccessBanner'
+import { BookingActions } from '@/components/BookingActions'
 
 export default async function TeacherDashboardPage({
   searchParams,
@@ -108,6 +109,12 @@ export default async function TeacherDashboardPage({
                       </a>
                     </div>
                   ) : null}
+                  <BookingActions
+                    bookingId={booking.id}
+                    status={booking.status}
+                    endAt={booking.end_at}
+                    teacherConfirmedAt={booking.teacher_confirmed_at}
+                  />
                 </div>
               </div>
             </Card>

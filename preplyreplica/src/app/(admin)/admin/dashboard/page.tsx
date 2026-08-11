@@ -8,6 +8,7 @@ import { Select } from '@/components/Select'
 import { Input } from '@/components/Input'
 import { Button } from '@/components/Button'
 import { AdminTeacherCard } from '@/components/AdminTeacherCard'
+import { AdminPayoutConfirmCard } from '@/components/AdminPayoutConfirmCard'
 
 type TeacherDocument = Database['public']['Tables']['teacher_documents']['Row']
 type TeacherProfileWithUser = Database['public']['Tables']['teacher_profiles']['Row'] & {
@@ -74,11 +75,18 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     })
   )
 
-  const [{ count: pendingCount }, { count: bookingCount }, { count: teacherCount }, { count: studentCount }] = await Promise.all([
+  const [{ count: pendingCount }, { count: bookingCount }, { count: teacherCount }, { count: studentCount }, { data: awaitingPayoutConfirmation }] = await Promise.all([
     supabase.from('teacher_profiles').select('id', { count: 'exact' }).eq('status', 'pending'),
     supabase.from('bookings').select('id', { count: 'exact' }),
     supabase.from('teacher_profiles').select('id', { count: 'exact' }),
     supabase.from('profiles').select('id', { count: 'exact' }).neq('role', 'admin'),
+    supabase
+      .from('bookings')
+      .select('id, subject, start_at, teacher_confirmed_at, teacher_profiles(profiles(full_name)), profiles!student_id(full_name, email)')
+      .eq('status', 'confirmed')
+      .not('teacher_confirmed_at', 'is', null)
+      .is('admin_confirmed_at', null)
+      .order('teacher_confirmed_at', { ascending: true }),
   ])
   const totalUsers = (teacherCount ?? 0) + (studentCount ?? 0)
 
@@ -107,6 +115,28 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
           <p className="mt-2 text-3xl font-semibold text-slate-900">{totalUsers}</p>
         </Card>
       </div>
+
+      {awaitingPayoutConfirmation?.length ? (
+        <div className="mt-10">
+          <h2 className="text-2xl font-semibold text-slate-900">Awaiting payout confirmation</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            The teacher marked these sessions complete. Confirm each one to release the teacher's payout.
+          </p>
+          <div className="mt-4 grid gap-4">
+            {awaitingPayoutConfirmation.map((booking) => (
+              <AdminPayoutConfirmCard
+                key={booking.id}
+                bookingId={booking.id}
+                subject={booking.subject}
+                startAt={booking.start_at}
+                teacherConfirmedAt={booking.teacher_confirmed_at as string}
+                teacherName={(booking as any).teacher_profiles?.profiles?.full_name || 'Teacher'}
+                studentName={(booking as any).profiles?.full_name || (booking as any).profiles?.email || 'Student'}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <form method="get" className="mt-10 grid gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card sm:grid-cols-2 lg:grid-cols-5">
         <div className="sm:col-span-2 lg:col-span-2">

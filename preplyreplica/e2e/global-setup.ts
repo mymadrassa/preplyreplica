@@ -65,6 +65,21 @@ export default async function globalSetup() {
     throw new Error(`Failed to seed e2e teacher_profiles row: ${teacherProfileError.message}`)
   }
 
+  // Wide-open weekly availability (every day, 08:00-20:00) so booking-flow
+  // tests always have a real bookable slot to pick, regardless of which
+  // date they happen to land on.
+  const { error: availabilityError } = await supabase.from('availability_slots').insert(
+    [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+      teacher_id: fixtures.teacher.id,
+      weekday,
+      start_time: '08:00',
+      end_time: '20:00',
+    }))
+  )
+  if (availabilityError) {
+    throw new Error(`Failed to seed e2e availability_slots: ${availabilityError.message}`)
+  }
+
   fs.writeFileSync(
     FIXTURES_PATH,
     JSON.stringify({ password: TEST_PASSWORD, ...fixtures }, null, 2)

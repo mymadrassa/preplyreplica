@@ -215,6 +215,8 @@ export type Database = {
           teacher_receives: number | null
           stripe_checkout_session_id: string | null
           reminder_sent_at: string | null
+          teacher_confirmed_at: string | null
+          admin_confirmed_at: string | null
           created_at: string
         }
         Insert: {
@@ -238,6 +240,8 @@ export type Database = {
           teacher_receives?: number | null
           stripe_checkout_session_id?: string | null
           reminder_sent_at?: string | null
+          teacher_confirmed_at?: string | null
+          admin_confirmed_at?: string | null
           created_at?: string
         }
         Update: {
@@ -260,6 +264,8 @@ export type Database = {
           teacher_receives?: number | null
           stripe_checkout_session_id?: string | null
           reminder_sent_at?: string | null
+          teacher_confirmed_at?: string | null
+          admin_confirmed_at?: string | null
           created_at?: string
         }
         Relationships: [

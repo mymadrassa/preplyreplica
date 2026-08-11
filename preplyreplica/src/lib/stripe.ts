@@ -78,6 +78,12 @@ export async function createBookingCheckoutSession({
       ],
       payment_intent_data: {
         application_fee_amount: applicationFeeAmount,
+        // Authorize the card without charging it yet — the booking only
+        // moves to 'confirmed' (and the charge is captured) once the
+        // teacher approves the request. Rejecting or timing out cancels
+        // the authorization instead, so a declined request never charges
+        // the student at all.
+        capture_method: 'manual',
       },
       metadata: { bookingId },
       success_url: successUrl,
@@ -93,6 +99,26 @@ export async function createBookingCheckoutSession({
     sessionId: session.id,
     paymentIntent: session.payment_intent as string,
   }
+}
+
+// The three functions below all act on a PaymentIntent that lives on the
+// teacher's connected account (direct charges), so every call needs the
+// `stripeAccount` request option — without it Stripe can't find the
+// PaymentIntent at all (it isn't visible from the platform account).
+
+/** Captures a previously-authorized (manual capture) payment once the teacher approves the booking. */
+export async function captureBookingPayment(paymentIntentId: string, teacherAccountId: string) {
+  return stripe.paymentIntents.capture(paymentIntentId, {}, { stripeAccount: teacherAccountId })
+}
+
+/** Releases an authorization hold without charging the card — used when the teacher rejects a request, or it times out unanswered. */
+export async function cancelBookingPayment(paymentIntentId: string, teacherAccountId: string) {
+  return stripe.paymentIntents.cancel(paymentIntentId, { stripeAccount: teacherAccountId })
+}
+
+/** Refunds an already-captured payment — used for student cancellations of a confirmed booking. */
+export async function refundBookingPayment(paymentIntentId: string, teacherAccountId: string) {
+  return stripe.refunds.create({ payment_intent: paymentIntentId }, { stripeAccount: teacherAccountId })
 }
 
 /** Pays out a specific amount from a teacher's connected-account balance to their bank account. */

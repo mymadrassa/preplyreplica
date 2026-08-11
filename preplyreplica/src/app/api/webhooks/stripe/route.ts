@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { constructStripeEvent } from '@/lib/stripe'
+import { sendNewBookingRequestEmail } from '@/lib/email'
 
 type PaymentRow = Database['public']['Tables']['payments']['Row']
 
@@ -40,9 +41,15 @@ export async function POST(request: Request) {
       .single<PaymentRow>()
 
     if (payment) {
-      const { data: booking } = await supabase.from('bookings').select('student_id').eq('id', payment.booking_id).single()
-      await supabase.from('bookings').update({ status: 'confirmed' } as Database['public']['Tables']['bookings']['Update']).eq('id', payment.booking_id)
-      await supabase.from('payments').update({ status: 'succeeded' } as Database['public']['Tables']['payments']['Update']).eq('id', payment.id)
+      const { data: booking } = await supabase
+        .from('bookings')
+        .select('student_id, teacher_id, subject, start_at')
+        .eq('id', payment.booking_id)
+        .single()
+      // Payment is authorized (manual capture), not charged yet — the
+      // booking waits on the teacher's approval before any money moves.
+      await supabase.from('bookings').update({ status: 'pending' } as Database['public']['Tables']['bookings']['Update']).eq('id', payment.booking_id)
+      await supabase.from('payments').update({ status: 'authorized' } as Database['public']['Tables']['payments']['Update']).eq('id', payment.id)
 
       if (booking?.student_id) {
         const { data: profile } = await supabase.from('profiles').select('pending_stripe_fees').eq('id', booking.student_id).single()
@@ -52,6 +59,24 @@ export async function POST(request: Request) {
           .from('profiles')
           .update({ pending_stripe_fees: Math.max(0, nextPending) } as Database['public']['Tables']['profiles']['Update'])
           .eq('id', booking.student_id)
+      }
+
+      if (booking?.teacher_id) {
+        const [{ data: teacherProfile }, { data: studentProfile }] = await Promise.all([
+          supabase.from('teacher_profiles').select('profiles(email, full_name)').eq('id', booking.teacher_id).single(),
+          supabase.from('profiles').select('full_name, email').eq('id', booking.student_id).single(),
+        ])
+        const teacherContact = (teacherProfile as any)?.profiles
+        if (teacherContact?.email) {
+          await sendNewBookingRequestEmail({
+            to: teacherContact.email,
+            teacherName: teacherContact.full_name || 'there',
+            studentName: (studentProfile as any)?.full_name || (studentProfile as any)?.email || 'A student',
+            subject: booking.subject,
+            startAt: booking.start_at,
+            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/teacher/dashboard`,
+          })
+        }
       }
     }
   }

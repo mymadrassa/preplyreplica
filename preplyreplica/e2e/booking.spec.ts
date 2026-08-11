@@ -32,10 +32,14 @@ test.describe('Booking eligibility rules on a teacher profile', () => {
     // The seeded fixture teacher is approved but intentionally has no
     // stripe_account_id — this exercises the real guard clause in
     // api/bookings/route.ts rather than attempting a real Stripe checkout.
+    // Picking a real available time (from the seeded 08:00-20:00 weekly
+    // slots) is required first: the picker only lets you submit a time it
+    // fetched from the actual availability API, not free-typed text.
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
     const dateStr = tomorrow.toISOString().slice(0, 10)
-    await page.getByLabel('Start date').fill(dateStr)
-    await page.getByLabel('Start time').fill('14:00')
+    await page.getByLabel('Date').fill(dateStr)
+    await expect(page.getByRole('button', { name: '10:00 AM' })).toBeVisible({ timeout: 10_000 })
+    await page.getByRole('button', { name: '10:00 AM' }).click()
     await page.getByRole('button', { name: /continue to payment/i }).click()
 
     await expect(page.getByText(/not available for booking/i)).toBeVisible({ timeout: 15_000 })

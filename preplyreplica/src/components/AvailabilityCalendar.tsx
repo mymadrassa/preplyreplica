@@ -4,15 +4,13 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, LayoutGrid, Rows3 } from 'lucide-react'
 import { WEEKDAY_LABELS } from '@/lib/constants'
+import { getOpenRanges, getBookingsOnDate, dateKey, type AvailabilitySlot, type AvailabilityException, type OccupyingBooking } from '@/lib/availability'
 
-type Slot = { weekday: number; start_time: string; end_time: string }
-type Exception = { exception_date: string; start_time: string | null; end_time: string | null; exception_type: 'blocked' | 'added' }
-type Booking = {
+type Slot = AvailabilitySlot
+type Exception = AvailabilityException
+type Booking = OccupyingBooking & {
   id: string
-  start_at: string
-  end_at: string
   subject: string
-  status: string
   profiles: { full_name: string | null; email: string | null } | null
 }
 
@@ -21,16 +19,6 @@ const DISPLAY_END_HOUR = 23
 const ROW_HEIGHT_PX = 48
 const TOTAL_MINUTES = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * 60
 const TOTAL_HEIGHT_PX = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * ROW_HEIGHT_PX
-const CANCELLED_STATUSES = new Set(['cancelled', 'rejected'])
-
-function toMinutes(time: string) {
-  const [hours, minutes] = time.split(':').map(Number)
-  return hours * 60 + minutes
-}
-
-function overlaps(rangeStart: number, rangeEnd: number, blockStart: number, blockEnd: number) {
-  return rangeStart < blockEnd && rangeEnd > blockStart
-}
 
 function minutesToPx(minutesSinceStart: number) {
   return (minutesSinceStart / TOTAL_MINUTES) * TOTAL_HEIGHT_PX
@@ -44,10 +32,6 @@ function formatTime(minutesSinceMidnight: number) {
   return `${hours12}:${String(minutes).padStart(2, '0')} ${period}`
 }
 
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
 function startOfWeek(date: Date) {
   const monday = new Date(date)
   monday.setHours(0, 0, 0, 0)
@@ -57,27 +41,10 @@ function startOfWeek(date: Date) {
 
 function dayStatus(date: Date, slots: Slot[], exceptions: Exception[], bookings: Booking[]) {
   const key = dateKey(date)
-  const weekday = date.getDay()
   const dayException = exceptions.find((exception) => exception.exception_date === key)
   const blockedAllDay = dayException?.exception_type === 'blocked' && !dayException.start_time
-
-  let availableRanges: [number, number][] = []
-  if (!blockedAllDay) {
-    if (dayException?.exception_type === 'added' && dayException.start_time && dayException.end_time) {
-      availableRanges = [[toMinutes(dayException.start_time), toMinutes(dayException.end_time)]]
-    } else {
-      availableRanges = slots
-        .filter((slot) => slot.weekday === weekday)
-        .map((slot): [number, number] => [toMinutes(slot.start_time), toMinutes(slot.end_time)])
-      if (dayException?.exception_type === 'blocked' && dayException.start_time && dayException.end_time) {
-        const blockStart = toMinutes(dayException.start_time)
-        const blockEnd = toMinutes(dayException.end_time)
-        availableRanges = availableRanges.filter(([start, end]) => !overlaps(start, end, blockStart, blockEnd))
-      }
-    }
-  }
-
-  const bookingsToday = bookings.filter((b) => !CANCELLED_STATUSES.has(b.status) && dateKey(new Date(b.start_at)) === key)
+  const availableRanges = getOpenRanges(date, slots, exceptions)
+  const bookingsToday = getBookingsOnDate(date, bookings)
 
   return { availableRanges, blockedAllDay, bookingsToday }
 }
