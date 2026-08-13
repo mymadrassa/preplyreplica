@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Wallet } from 'lucide-react'
+import { AlertTriangle, Wallet } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { FormMessage } from '@/components/FormMessage'
@@ -14,9 +14,20 @@ interface AdminPayoutConfirmCardProps {
   teacherName: string
   studentName: string
   teacherConfirmedAt: string
+  studentJoinedAt: string | null
+  teacherJoinedAt: string | null
 }
 
-export function AdminPayoutConfirmCard({ bookingId, subject, startAt, teacherName, studentName, teacherConfirmedAt }: AdminPayoutConfirmCardProps) {
+export function AdminPayoutConfirmCard({
+  bookingId,
+  subject,
+  startAt,
+  teacherName,
+  studentName,
+  teacherConfirmedAt,
+  studentJoinedAt,
+  teacherJoinedAt,
+}: AdminPayoutConfirmCardProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -42,6 +53,16 @@ export function AdminPayoutConfirmCard({ bookingId, subject, startAt, teacherNam
           <p className="text-slate-900">{teacherName} · {studentName}</p>
           <p className="text-sm text-slate-500">{new Date(startAt).toLocaleString()}</p>
           <p className="mt-1 text-xs text-slate-400">Teacher confirmed {new Date(teacherConfirmedAt).toLocaleString()}</p>
+          {!studentJoinedAt ? (
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" /> Student never joined this session
+            </p>
+          ) : null}
+          {!teacherJoinedAt ? (
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" /> Teacher never joined this session
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-2">
           <Button type="button" onClick={confirm} loading={loading} disabled={loading}>

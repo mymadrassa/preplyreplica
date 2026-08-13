@@ -217,6 +217,10 @@ export type Database = {
           reminder_sent_at: string | null
           teacher_confirmed_at: string | null
           admin_confirmed_at: string | null
+          student_joined_at: string | null
+          student_left_at: string | null
+          teacher_joined_at: string | null
+          teacher_left_at: string | null
           created_at: string
         }
         Insert: {
@@ -242,6 +246,10 @@ export type Database = {
           reminder_sent_at?: string | null
           teacher_confirmed_at?: string | null
           admin_confirmed_at?: string | null
+          student_joined_at?: string | null
+          student_left_at?: string | null
+          teacher_joined_at?: string | null
+          teacher_left_at?: string | null
           created_at?: string
         }
         Update: {
@@ -266,6 +274,10 @@ export type Database = {
           reminder_sent_at?: string | null
           teacher_confirmed_at?: string | null
           admin_confirmed_at?: string | null
+          student_joined_at?: string | null
+          student_left_at?: string | null
+          teacher_joined_at?: string | null
+          teacher_left_at?: string | null
           created_at?: string
         }
         Relationships: [

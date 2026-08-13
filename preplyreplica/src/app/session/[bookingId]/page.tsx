@@ -1,7 +1,8 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/session/[bookingId]/page.tsx
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
-import { createJitsiRoomUrl } from '@/lib/jitsi'
+import { getJitsiRoomName } from '@/lib/jitsi'
+import { JitsiSessionRoom } from '@/components/JitsiSessionRoom'
 
 interface SessionPageProps {
   params: {
@@ -17,12 +18,19 @@ export default async function SessionPage({ params }: SessionPageProps) {
 
   const { data: booking, error } = await supabase
     .from('bookings')
-    .select('*')
+    .select('*, teacher_profiles(profiles(full_name)), profiles!student_id(full_name)')
     .eq('id', params.bookingId)
     .single()
 
   if (error || !booking) return notFound()
   if (booking.student_id !== userId && booking.teacher_id !== userId) return notFound()
+
+  const isTeacher = booking.teacher_id === userId
+  const role = isTeacher ? 'teacher' : 'student'
+  const teacherName = (booking as any).teacher_profiles?.profiles?.full_name || 'The teacher'
+  const studentName = (booking as any).profiles?.full_name || 'The student'
+  const displayName = isTeacher ? teacherName : studentName
+  const otherPartyName = isTeacher ? studentName : teacherName
 
   const startTime = new Date(booking.start_at).getTime()
   const now = Date.now()
@@ -35,15 +43,22 @@ export default async function SessionPage({ params }: SessionPageProps) {
     )
   }
 
-  const roomUrl = createJitsiRoomUrl(booking.id)
+  const roomName = getJitsiRoomName(booking.id)
 
   return (
     <main className="container mx-auto px-4 py-12">
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-semibold text-slate-900">Live lesson</h1>
         <p className="mt-2 text-slate-600">Room for booking {booking.id}</p>
-        <div className="mt-6 aspect-[16/9] overflow-hidden rounded-3xl bg-slate-900">
-          <iframe src={roomUrl} className="h-full w-full" allow="camera; microphone; fullscreen" />
+        <div className="mt-6">
+          <JitsiSessionRoom
+            bookingId={booking.id}
+            roomName={roomName}
+            role={role}
+            displayName={displayName}
+            otherPartyName={otherPartyName}
+            endAt={booking.end_at}
+          />
         </div>
       </div>
     </main>

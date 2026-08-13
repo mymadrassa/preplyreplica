@@ -82,7 +82,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     supabase.from('profiles').select('id', { count: 'exact' }).neq('role', 'admin'),
     supabase
       .from('bookings')
-      .select('id, subject, start_at, teacher_confirmed_at, teacher_profiles(profiles(full_name)), profiles!student_id(full_name, email)')
+      .select('id, subject, start_at, teacher_confirmed_at, student_joined_at, teacher_joined_at, teacher_profiles(profiles(full_name)), profiles!student_id(full_name, email)')
       .eq('status', 'confirmed')
       .not('teacher_confirmed_at', 'is', null)
       .is('admin_confirmed_at', null)
@@ -132,6 +132,8 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
                 teacherConfirmedAt={booking.teacher_confirmed_at as string}
                 teacherName={(booking as any).teacher_profiles?.profiles?.full_name || 'Teacher'}
                 studentName={(booking as any).profiles?.full_name || (booking as any).profiles?.email || 'Student'}
+                studentJoinedAt={booking.student_joined_at as string | null}
+                teacherJoinedAt={booking.teacher_joined_at as string | null}
               />
             ))}
           </div>
