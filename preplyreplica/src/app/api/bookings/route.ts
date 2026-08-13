@@ -4,6 +4,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { createBookingCheckoutSession } from '@/lib/stripe'
 import { calculatePricing, toPence } from '@/lib/pricing'
 import { isRangeFree } from '@/lib/availability'
+import { MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
 
 const bookingSchema = z.object({
   teacherId: z.string().uuid(),
@@ -39,6 +40,18 @@ export async function POST(request: Request) {
 
   const startDate = new Date(startAt)
   const endDate = new Date(startDate.getTime() + duration * 60000)
+
+  // Authoritative minimum-notice check — the calendar UI already disables
+  // slots inside this window, but that alone is only a client-side hint;
+  // this is what actually prevents a too-soon booking (e.g. a stale page,
+  // or a direct API call).
+  const hoursUntilStart = (startDate.getTime() - Date.now()) / (60 * 60 * 1000)
+  if (hoursUntilStart < MIN_BOOKING_NOTICE_HOURS) {
+    return NextResponse.json(
+      { error: `Sessions must be booked at least ${MIN_BOOKING_NOTICE_HOURS} hours in advance.` },
+      { status: 409 }
+    )
+  }
 
   // Re-validate against the teacher's real availability server-side —
   // the picker UI only shows open slots, but never trust that alone: the

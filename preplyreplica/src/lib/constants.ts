@@ -44,6 +44,11 @@ export const WEEKDAY_LABELS: Record<number, string> = Object.fromEntries(
   WEEKDAYS.map((day) => [Number(day.value), day.label])
 )
 
+// A booking's start time must be at least this far in the future — enforced
+// both when computing selectable slots and, authoritatively, server-side in
+// POST /api/bookings.
+export const MIN_BOOKING_NOTICE_HOURS = 24
+
 // Half-hour increments across a full day, e.g. "06:00" -> "6:00 AM".
 export const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const totalMinutes = i * 30

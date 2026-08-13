@@ -5,7 +5,6 @@ import { BookingForm } from '@/components/BookingForm'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RatingStars } from '@/components/RatingStars'
-import { WEEKDAY_LABELS } from '@/lib/constants'
 
 interface TeacherPageProps {
   params: {
@@ -17,7 +16,7 @@ export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
   const supabase = createServerClient()
   const { data: teacher, error } = await supabase
     .from('teacher_profiles')
-    .select('*, profiles(*), availability_slots(*), availability_exceptions(*), reviews(*, profiles!student_id(full_name))')
+    .select('*, profiles(*), reviews(*, profiles!student_id(full_name))')
     .eq('id', params.id)
     .order('created_at', { referencedTable: 'reviews', ascending: false })
     .single()
@@ -81,20 +80,6 @@ export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
               />
             </div>
           ) : null}
-          <div className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-6 text-slate-700 shadow-sm">
-            <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Availability</p>
-            {teacher.availability_slots?.length ? (
-              teacher.availability_slots.map((slot) => (
-                <div key={slot.id} className="rounded-2xl bg-slate-50 p-4">
-                  <p className="font-semibold">{WEEKDAY_LABELS[slot.weekday]}</p>
-                  <p>{slot.start_time} – {slot.end_time}</p>
-                </div>
-              ))
-            ) : (
-              <p>No weekly availability slots defined yet.</p>
-            )}
-          </div>
-
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold text-slate-900">Reviews</h2>

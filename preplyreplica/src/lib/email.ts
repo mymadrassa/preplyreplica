@@ -159,6 +159,54 @@ export async function sendBookingCancelledEmail({
   )
 }
 
+/** Sent to the student when an admin doesn't confirm a completed session within the review window — refunded automatically instead of paying the teacher out. */
+export async function sendPayoutReviewTimedOutStudentEmail({
+  to,
+  studentName,
+  teacherName,
+  subject,
+  startAt,
+}: {
+  to: string
+  studentName: string
+  teacherName: string
+  subject: string
+  startAt: string
+}) {
+  await sendEmail(
+    to,
+    `You've been refunded: ${subject} with ${teacherName}`,
+    `
+      <p>Hi ${studentName},</p>
+      <p>Your <strong>${subject}</strong> lesson with ${teacherName} on <strong>${formatDateTime(startAt)}</strong> wasn't reviewed by our team in time, so you've been fully refunded.</p>
+    `
+  )
+}
+
+/** Sent to the teacher in the same situation — explains why no payout occurred despite them marking the session complete. */
+export async function sendPayoutReviewTimedOutTeacherEmail({
+  to,
+  teacherName,
+  studentName,
+  subject,
+  startAt,
+}: {
+  to: string
+  teacherName: string
+  studentName: string
+  subject: string
+  startAt: string
+}) {
+  await sendEmail(
+    to,
+    `Payout not released: ${subject} with ${studentName}`,
+    `
+      <p>Hi ${teacherName},</p>
+      <p>Our team didn't confirm your <strong>${subject}</strong> lesson with ${studentName} on <strong>${formatDateTime(startAt)}</strong> in time, so no payout was released and the student has been refunded. We're sorry for the inconvenience — please reach out if you believe this was in error.</p>
+    `
+  )
+}
+
 /** Sent to admins once a teacher marks a session complete — payout is on hold until an admin also confirms. */
 export async function sendAwaitingAdminReviewEmail({
   to,

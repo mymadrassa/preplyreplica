@@ -84,20 +84,31 @@ export function isRangeFree(
   return !conflicts
 }
 
-/** Valid booking start times (as "HH:MM") for a given date + duration, stepped every 30 min, excluding times already in the past. */
+/**
+ * Valid booking start times (as "HH:MM") for a given date + duration, stepped every
+ * 30 min, excluding times already in the past and — when `minNoticeHours` is set —
+ * times closer than that to now (e.g. the 24h minimum booking notice). The cutoff is
+ * computed as `now + minNoticeHours` and compared by date, so a notice window that
+ * spills into the next calendar day correctly blocks the start of that day too, not
+ * just "today."
+ */
 export function getAvailableStartTimes(
   date: Date,
   durationMinutes: number,
   slots: AvailabilitySlot[],
   exceptions: AvailabilityException[],
-  bookings: OccupyingBooking[]
+  bookings: OccupyingBooking[],
+  minNoticeHours = 0
 ): string[] {
   const openRanges = getOpenRanges(date, slots, exceptions)
   if (!openRanges.length) return []
 
-  const now = new Date()
-  const isToday = dateKey(date) === dateKey(now)
-  const earliestMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0
+  const cutoff = new Date(Date.now() + minNoticeHours * 60 * 60 * 1000)
+  const dateIsBeforeCutoffDay = dateKey(date) < dateKey(cutoff)
+  if (dateIsBeforeCutoffDay) return []
+
+  const dateIsCutoffDay = dateKey(date) === dateKey(cutoff)
+  const earliestMinutes = dateIsCutoffDay ? cutoff.getHours() * 60 + cutoff.getMinutes() : 0
 
   const candidates = new Set<number>()
   for (const [open, close] of openRanges) {
@@ -110,4 +121,46 @@ export function getAvailableStartTimes(
     .filter((start) => isRangeFree(date, start, start + durationMinutes, slots, exceptions, bookings))
     .sort((a, b) => a - b)
     .map((start) => `${String(Math.floor(start / 60)).padStart(2, '0')}:${String(start % 60).padStart(2, '0')}`)
+}
+
+export type SlotState = 'bookable' | 'too_soon' | 'unavailable'
+
+/**
+ * Like `getAvailableStartTimes`, but classifies every candidate start time
+ * (minutes since midnight) instead of only returning the bookable ones —
+ * used by the student booking calendar to render three distinct states
+ * (openly bookable / open but inside the notice window / already taken)
+ * rather than collapsing "too soon" and "taken" into the same non-clickable
+ * appearance.
+ */
+export function getSlotStates(
+  date: Date,
+  durationMinutes: number,
+  slots: AvailabilitySlot[],
+  exceptions: AvailabilityException[],
+  bookings: OccupyingBooking[],
+  minNoticeHours = 0
+): { start: number; state: SlotState }[] {
+  const openRanges = getOpenRanges(date, slots, exceptions)
+  if (!openRanges.length) return []
+
+  const cutoff = new Date(Date.now() + minNoticeHours * 60 * 60 * 1000).getTime()
+
+  const candidates = new Set<number>()
+  for (const [open, close] of openRanges) {
+    for (let start = Math.ceil(open / 30) * 30; start + durationMinutes <= close; start += 30) {
+      candidates.add(start)
+    }
+  }
+
+  return Array.from(candidates)
+    .sort((a, b) => a - b)
+    .map((start) => {
+      if (!isRangeFree(date, start, start + durationMinutes, slots, exceptions, bookings)) {
+        return { start, state: 'unavailable' as const }
+      }
+      const slotStart = new Date(date)
+      slotStart.setHours(Math.floor(start / 60), start % 60, 0, 0)
+      return { start, state: (slotStart.getTime() < cutoff ? 'too_soon' : 'bookable') as SlotState }
+    })
 }

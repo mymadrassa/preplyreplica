@@ -4,14 +4,18 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, LayoutGrid, Rows3 } from 'lucide-react'
 import { WEEKDAY_LABELS } from '@/lib/constants'
-import { getOpenRanges, getBookingsOnDate, dateKey, type AvailabilitySlot, type AvailabilityException, type OccupyingBooking } from '@/lib/availability'
+import { getOpenRanges, getBookingsOnDate, getSlotStates, dateKey, type AvailabilitySlot, type AvailabilityException, type OccupyingBooking } from '@/lib/availability'
 
 type Slot = AvailabilitySlot
 type Exception = AvailabilityException
+// `id`/`subject`/`profiles` are only present (and only rendered) in 'owner'
+// mode — the 'booking' mode's data source (the public availability API)
+// deliberately omits them, since a student browsing a teacher's calendar
+// shouldn't see who else booked what.
 type Booking = OccupyingBooking & {
-  id: string
-  subject: string
-  profiles: { full_name: string | null; email: string | null } | null
+  id?: string
+  subject?: string
+  profiles?: { full_name: string | null; email: string | null } | null
 }
 
 const DISPLAY_START_HOUR = 6
@@ -49,8 +53,39 @@ function dayStatus(date: Date, slots: Slot[], exceptions: Exception[], bookings:
   return { availableRanges, blockedAllDay, bookingsToday }
 }
 
-export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: Slot[]; exceptions: Exception[]; bookings: Booking[] }) {
+interface AvailabilityCalendarProps {
+  slots: Slot[]
+  exceptions: Exception[]
+  bookings: Booking[]
+  /** 'owner' (default) is the teacher's own read-only-except-for-joining view. 'booking' is the
+   * student-facing picker: it hides who booked what and turns open ranges into clickable start-time
+   * slots for `durationMinutes`, gated by `minNoticeHours`. */
+  mode?: 'owner' | 'booking'
+  durationMinutes?: number
+  selectedStart?: Date | null
+  onSelectStart?: (date: Date) => void
+  minNoticeHours?: number
+  /** Fired whenever the visible week changes — 'booking' mode's caller uses this to fetch that week's data. */
+  onVisibleWeekChange?: (weekStart: Date) => void
+}
+
+export function AvailabilityCalendar({
+  slots,
+  exceptions,
+  bookings,
+  mode = 'owner',
+  durationMinutes = 60,
+  selectedStart = null,
+  onSelectStart,
+  minNoticeHours = 0,
+  onVisibleWeekChange,
+}: AvailabilityCalendarProps) {
+  // Booking mode is always a week-at-a-time picker — a month grid can't show
+  // per-slot availability, and the caller only ever fetches one week of data
+  // at a time (see onVisibleWeekChange), so a month view would render mostly
+  // blank.
   const [view, setView] = useState<'week' | 'month'>('week')
+  const effectiveView = mode === 'booking' ? 'week' : view
   const [anchor, setAnchor] = useState(() => new Date())
   const [now, setNow] = useState(() => new Date())
   const [hoverMinutes, setHoverMinutes] = useState<number | null>(null)
@@ -61,6 +96,11 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
   }, [])
 
   const weekStart = useMemo(() => startOfWeek(anchor), [anchor])
+
+  useEffect(() => {
+    onVisibleWeekChange?.(weekStart)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart.getTime()])
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => {
     const date = new Date(weekStart)
     date.setDate(weekStart.getDate() + i)
@@ -70,7 +110,7 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
   const hours = Array.from({ length: DISPLAY_END_HOUR - DISPLAY_START_HOUR }, (_, i) => DISPLAY_START_HOUR + i)
 
   const monthGrid = useMemo(() => {
-    if (view !== 'month') return []
+    if (effectiveView !== 'month') return []
     const firstOfMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
     const gridStart = startOfWeek(firstOfMonth)
     return Array.from({ length: 6 }, (_, week) =>
@@ -80,7 +120,7 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
         return date
       })
     )
-  }, [view, anchor])
+  }, [effectiveView, anchor])
 
   function goToday() {
     setAnchor(new Date())
@@ -89,7 +129,7 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
   function goPrev() {
     setAnchor((current) => {
       const next = new Date(current)
-      if (view === 'week') next.setDate(current.getDate() - 7)
+      if (effectiveView === 'week') next.setDate(current.getDate() - 7)
       else next.setMonth(current.getMonth() - 1)
       return next
     })
@@ -98,7 +138,7 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
   function goNext() {
     setAnchor((current) => {
       const next = new Date(current)
-      if (view === 'week') next.setDate(current.getDate() + 7)
+      if (effectiveView === 'week') next.setDate(current.getDate() + 7)
       else next.setMonth(current.getMonth() + 1)
       return next
     })
@@ -112,7 +152,7 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
   }
 
   const rangeLabel =
-    view === 'week'
+    effectiveView === 'week'
       ? `${weekDays[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${weekDays[6].toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
       : anchor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
@@ -134,25 +174,27 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
           </button>
           <p className="ml-2 text-sm font-semibold text-slate-900">{rangeLabel}</p>
         </div>
-        <div className="flex rounded-full border border-slate-200 p-1">
-          <button
-            type="button"
-            onClick={() => setView('week')}
-            className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${view === 'week' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <Rows3 className="h-3.5 w-3.5" aria-hidden="true" /> Week
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('month')}
-            className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${view === 'month' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> Month
-          </button>
-        </div>
+        {mode === 'owner' ? (
+          <div className="flex rounded-full border border-slate-200 p-1">
+            <button
+              type="button"
+              onClick={() => setView('week')}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${view === 'week' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <Rows3 className="h-3.5 w-3.5" aria-hidden="true" /> Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('month')}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${view === 'month' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> Month
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {view === 'week' ? (
+      {effectiveView === 'week' ? (
         <div className="overflow-x-auto">
           <div className="grid min-w-[720px] grid-cols-[4rem_repeat(7,1fr)]">
             <div />
@@ -197,6 +239,50 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
                       className="absolute inset-0 cursor-help bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)]"
                       title="Blocked — you marked this day unavailable"
                     />
+                  ) : mode === 'booking' ? (
+                    getSlotStates(date, durationMinutes, slots, exceptions, bookings, minNoticeHours).map(({ start, state }) => {
+                      const top = minutesToPx(start - DISPLAY_START_HOUR * 60)
+                      const height = minutesToPx(durationMinutes)
+
+                      if (state === 'unavailable') {
+                        return <div key={start} className="absolute inset-x-0.5 rounded-md bg-slate-300" style={{ top, height }} title="Already booked" />
+                      }
+
+                      if (state === 'too_soon') {
+                        return (
+                          <div
+                            key={start}
+                            className="absolute inset-x-0.5 cursor-not-allowed rounded-md bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)] ring-1 ring-inset ring-slate-300"
+                            style={{ top, height }}
+                            title={`Too soon to book — sessions must be booked at least ${minNoticeHours} hours in advance.`}
+                          />
+                        )
+                      }
+
+                      const isSelected =
+                        !!selectedStart &&
+                        dateKey(date) === dateKey(selectedStart) &&
+                        start === selectedStart.getHours() * 60 + selectedStart.getMinutes()
+
+                      return (
+                        <button
+                          key={start}
+                          type="button"
+                          onClick={() => {
+                            const selected = new Date(date)
+                            selected.setHours(Math.floor(start / 60), start % 60, 0, 0)
+                            onSelectStart?.(selected)
+                          }}
+                          className={`absolute inset-x-0.5 cursor-pointer rounded-md transition-colors ${
+                            isSelected
+                              ? 'bg-brand-600 ring-2 ring-inset ring-brand-700'
+                              : 'bg-emerald-200 ring-1 ring-inset ring-emerald-400 hover:bg-emerald-300'
+                          }`}
+                          style={{ top, height }}
+                          title={isSelected ? 'Selected' : 'Available — click to select this time'}
+                        />
+                      )
+                    })
                   ) : (
                     availableRanges.map(([start, end], i) => (
                       <div
@@ -208,24 +294,25 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
                     ))
                   )}
 
-                  {bookingsToday.map((booking) => {
-                    const start = new Date(booking.start_at)
-                    const end = new Date(booking.end_at)
-                    const startMinutes = start.getHours() * 60 + start.getMinutes() - DISPLAY_START_HOUR * 60
-                    const endMinutes = end.getHours() * 60 + end.getMinutes() - DISPLAY_START_HOUR * 60
-                    const studentName = booking.profiles?.full_name || booking.profiles?.email || 'Student'
-                    return (
-                      <Link
-                        key={booking.id}
-                        href={`/session/${booking.id}`}
-                        title={`Join session: ${booking.subject} with ${studentName} — click to open`}
-                        className="absolute inset-x-0.5 cursor-pointer overflow-hidden rounded-md bg-brand-600 px-1.5 py-1 text-[11px] leading-tight text-white shadow-sm transition-colors hover:bg-brand-700"
-                        style={{ top: minutesToPx(startMinutes), height: Math.max(minutesToPx(endMinutes - startMinutes), 20) }}
-                      >
-                        <span className="line-clamp-2 font-medium">{booking.subject} · {studentName}</span>
-                      </Link>
-                    )
-                  })}
+                  {mode === 'owner' &&
+                    bookingsToday.map((booking) => {
+                      const start = new Date(booking.start_at)
+                      const end = new Date(booking.end_at)
+                      const startMinutes = start.getHours() * 60 + start.getMinutes() - DISPLAY_START_HOUR * 60
+                      const endMinutes = end.getHours() * 60 + end.getMinutes() - DISPLAY_START_HOUR * 60
+                      const studentName = booking.profiles?.full_name || booking.profiles?.email || 'Student'
+                      return (
+                        <Link
+                          key={booking.id}
+                          href={`/session/${booking.id}`}
+                          title={`Join session: ${booking.subject} with ${studentName} — click to open`}
+                          className="absolute inset-x-0.5 cursor-pointer overflow-hidden rounded-md bg-brand-600 px-1.5 py-1 text-[11px] leading-tight text-white shadow-sm transition-colors hover:bg-brand-700"
+                          style={{ top: minutesToPx(startMinutes), height: Math.max(minutesToPx(endMinutes - startMinutes), 20) }}
+                        >
+                          <span className="line-clamp-2 font-medium">{booking.subject} · {studentName}</span>
+                        </Link>
+                      )
+                    })}
 
                   {isToday && showNowLine ? (
                     <div className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-red-500" style={{ top: minutesToPx(nowMinutesSinceStart) }}>
@@ -294,9 +381,20 @@ export function AvailabilityCalendar({ slots, exceptions, bookings }: { slots: S
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-600">
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-200 ring-1 ring-inset ring-emerald-400" /> Available</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-brand-600" /> Booked session (click to join)</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)] ring-1 ring-inset ring-slate-300" /> Blocked</span>
+        {mode === 'booking' ? (
+          <>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-200 ring-1 ring-inset ring-emerald-400" /> Available — click to select</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-brand-600" /> Selected</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-slate-300" /> Already booked</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)] ring-1 ring-inset ring-slate-300" /> Too soon to book</span>
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-200 ring-1 ring-inset ring-emerald-400" /> Available</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-brand-600" /> Booked session (click to join)</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f1f5f9_6px,#f1f5f9_12px)] ring-1 ring-inset ring-slate-300" /> Blocked</span>
+          </>
+        )}
         <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-red-500" /> Current time</span>
       </div>
     </div>
