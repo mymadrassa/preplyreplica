@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
+import { toFriendlyAuthMessage } from '@/lib/errorMessages'
 
 export interface CompleteSignupParams {
   email: string
@@ -10,7 +11,10 @@ export interface CompleteSignupParams {
 
 export type CompleteSignupResult =
   | { ok: true; userId: string; hasSession: boolean }
-  | { ok: false; status: number; message: string }
+  // `message` is user-facing (already mapped via toFriendlyAuthMessage);
+  // `rawMessage` is the original provider error, kept around so callers can
+  // log the real technical detail without showing it to the user.
+  | { ok: false; status: number; message: string; rawMessage: string }
 
 // Shared by the direct registration page (browser client) and the
 // onboarding-wizard completion route (server client) so the anti-enumeration
@@ -32,7 +36,7 @@ export async function completeSignup(
   })
 
   if (error) {
-    return { ok: false, status: 400, message: error.message }
+    return { ok: false, status: 400, message: toFriendlyAuthMessage(error.message), rawMessage: error.message }
   }
 
   // Supabase deliberately returns no error when the email already belongs to
@@ -40,11 +44,13 @@ export async function completeSignup(
   // an empty `identities` array instead. Without this check the flow falls
   // through as if a brand-new signup succeeded.
   if (data.user && data.user.identities && data.user.identities.length === 0) {
-    return { ok: false, status: 409, message: 'An account with this email already exists. Please log in instead.' }
+    const message = 'An account with this email already exists. Please log in instead.'
+    return { ok: false, status: 409, message, rawMessage: message }
   }
 
   if (!data.user) {
-    return { ok: false, status: 500, message: 'Signup did not return a user.' }
+    const message = 'Something went wrong creating your account. Please try again.'
+    return { ok: false, status: 500, message, rawMessage: 'Signup did not return a user.' }
   }
 
   const profile: Database['public']['Tables']['profiles']['Insert'] = {
@@ -54,7 +60,12 @@ export async function completeSignup(
   }
   const { error: profileError } = await profilesClient.from('profiles').upsert(profile)
   if (profileError) {
-    return { ok: false, status: 500, message: `Profile error: ${profileError.message}` }
+    return {
+      ok: false,
+      status: 500,
+      message: 'Something went wrong saving your account. Please try again.',
+      rawMessage: `Profile error: ${profileError.message}`,
+    }
   }
 
   return { ok: true, userId: data.user.id, hasSession: Boolean(data.session) }

@@ -497,6 +497,29 @@ export type Database = {
           }
         ]
       }
+      error_logs: {
+        Row: {
+          id: number
+          context: string
+          message: string
+          detail: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          context: string
+          message: string
+          detail?: string | null
+          created_at?: string
+        }
+        Update: {
+          context?: string
+          message?: string
+          detail?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {}
     Functions: {}

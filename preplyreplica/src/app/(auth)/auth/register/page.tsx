@@ -5,6 +5,7 @@ import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { completeSignup } from '@/lib/auth/completeSignup'
+import { logClientError } from '@/lib/logClientError'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -44,6 +45,7 @@ function RegisterForm() {
 
     if (!result.ok) {
       setError(result.message)
+      logClientError('register', result.message, result.rawMessage)
       setLoading(false)
       return
     }

@@ -52,6 +52,7 @@ export async function POST(request: Request) {
   )
 
   if (!signupResult.ok) {
+    await serviceClient.from('error_logs').insert({ context: 'onboarding_signup', message: signupResult.message, detail: signupResult.rawMessage })
     return NextResponse.json({ error: signupResult.message }, { status: signupResult.status })
   }
 
@@ -65,7 +66,10 @@ export async function POST(request: Request) {
     selected_teacher_id: selectedTeacherId,
   })
   if (preferencesError) {
-    return NextResponse.json({ error: `Could not save preferences: ${preferencesError.message}` }, { status: 500 })
+    await serviceClient
+      .from('error_logs')
+      .insert({ context: 'onboarding_preferences', message: 'Could not save preferences', detail: preferencesError.message })
+    return NextResponse.json({ error: 'We created your account, but something went wrong saving your preferences. You can set them later from your dashboard.' }, { status: 500 })
   }
 
   if (selectedTeacherId) {
