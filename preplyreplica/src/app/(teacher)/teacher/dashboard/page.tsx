@@ -1,12 +1,14 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/dashboard/page.tsx
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { AlertTriangle, CalendarClock, CalendarPlus, CalendarX2, ClipboardCheck, Pencil, Star, Video, Wallet } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, CalendarPlus, ClipboardCheck, Pencil, Star, Video, Wallet } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StripeOnboardingSuccessBanner } from '@/components/StripeOnboardingSuccessBanner'
 import { BookingActions } from '@/components/BookingActions'
+import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
+import { dateKey } from '@/lib/availability'
 
 export default async function TeacherDashboardPage({
   searchParams,
@@ -41,6 +43,10 @@ export default async function TeacherDashboardPage({
           <Link href="/teacher/onboarding" className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">
             <Pencil className="h-4 w-4" aria-hidden="true" />
             Edit profile
+          </Link>
+          <Link href="/teacher/earnings" className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">
+            <Wallet className="h-4 w-4" aria-hidden="true" />
+            Earnings
           </Link>
           <Link href="/teacher/availability" className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600">
             <CalendarClock className="h-4 w-4" aria-hidden="true" />
@@ -87,45 +93,54 @@ export default async function TeacherDashboardPage({
       </div>
       <div className="mt-10">
         <h2 className="text-2xl font-semibold text-slate-900">Next bookings</h2>
-        <div className="mt-6 grid gap-4">
-          {bookings?.length ? bookings.map((booking) => (
-            <Card key={booking.id}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{booking.subject}</p>
-                  <p className="text-slate-700">{new Date(booking.start_at).toLocaleString()}</p>
-                </div>
-                <div className="text-right">
-                  <StatusBadge status={booking.status} />
+        <div className="mt-6">
+          <BookingsTable
+            counterpartLabel="Student"
+            emptyMessage="No upcoming bookings yet."
+            rows={(bookings ?? []).map(
+              (booking): BookingRow => ({
+                id: booking.id,
+                subject: booking.subject,
+                startAt: booking.start_at,
+                status: booking.status,
+                counterpartName: booking.profiles?.full_name || booking.profiles?.email || 'Student',
+                counterpartAvatarUrl: booking.profiles?.avatar_url,
+                isTrial: booking.is_trial,
+              })
+            )}
+            renderActions={(row) => {
+              const booking = bookings?.find((b) => b.id === row.id)
+              if (!booking) return null
+              return (
+                <>
+                  <Link
+                    href={`/teacher/availability?date=${dateKey(new Date(booking.start_at))}`}
+                    title="View in calendar"
+                    className="text-slate-500 hover:text-slate-700"
+                  >
+                    <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                  </Link>
                   {booking.status === 'confirmed' ? (
-                    <div className="mt-2 flex flex-col items-end gap-1">
-                      <Link href={`/session/${booking.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline">
+                    <>
+                      <Link href={`/session/${booking.id}`} title="Join session" className="text-brand-700 hover:text-brand-800">
                         <Video className="h-4 w-4" aria-hidden="true" />
-                        Join session
                       </Link>
-                      <a href={`/api/bookings/${booking.id}/calendar`} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+                      <a href={`/api/bookings/${booking.id}/calendar`} title="Add to calendar" className="text-brand-600 hover:text-brand-700">
                         <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-                        Add to calendar
                       </a>
-                    </div>
+                    </>
                   ) : null}
                   <BookingActions
+                    compact
                     bookingId={booking.id}
                     status={booking.status}
                     endAt={booking.end_at}
                     teacherConfirmedAt={booking.teacher_confirmed_at}
                   />
-                </div>
-              </div>
-            </Card>
-          )) : (
-            <Card>
-              <div className="flex items-center gap-3 text-slate-600">
-                <CalendarX2 className="h-5 w-5 text-slate-400" aria-hidden="true" />
-                <p>No upcoming bookings yet.</p>
-              </div>
-            </Card>
-          )}
+                </>
+              )
+            }}
+          />
         </div>
       </div>
     </main>

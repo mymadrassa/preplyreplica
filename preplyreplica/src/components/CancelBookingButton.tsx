@@ -27,7 +27,7 @@ export function CancelBookingButton({ bookingId }: { bookingId: string }) {
 
   if (confirming) {
     return (
-      <div className="mt-2 flex flex-col items-end gap-2">
+      <div className="flex flex-col items-end gap-2">
         <p className="text-xs text-slate-500">Cancel and refund this lesson?</p>
         <div className="flex gap-2">
           <Button type="button" variant="secondary" onClick={() => setConfirming(false)} disabled={loading}>
@@ -46,7 +46,7 @@ export function CancelBookingButton({ bookingId }: { bookingId: string }) {
     <button
       type="button"
       onClick={() => setConfirming(true)}
-      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 hover:underline"
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600 hover:underline"
     >
       <XCircle className="h-4 w-4" aria-hidden="true" />
       Cancel booking

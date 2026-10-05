@@ -11,10 +11,14 @@ interface BookingActionsProps {
   status: string
   endAt: string
   teacherConfirmedAt: string | null
+  /** Icon-only buttons sized for a table action cell, instead of the full-width stacked layout built for a card. */
+  compact?: boolean
+  /** Called after a successful approve/reject/mark-complete, once router.refresh() has been kicked off — the action tells the caller which one happened (e.g. so a popover hosting this can react differently to a decline than an approval). */
+  onSuccess?: (action: 'approve' | 'reject' | 'complete') => void
 }
 
 /** Teacher-facing actions for a single booking: approve/reject a pending request, or mark a finished session complete. */
-export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt }: BookingActionsProps) {
+export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, compact = false, onSuccess }: BookingActionsProps) {
   const router = useRouter()
   const [pending, setPending] = useState<'approve' | 'reject' | 'complete' | null>(null)
   const [error, setError] = useState('')
@@ -34,6 +38,7 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt }:
       return
     }
     router.refresh()
+    onSuccess?.(action)
   }
 
   async function markComplete() {
@@ -47,9 +52,23 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt }:
       return
     }
     router.refresh()
+    onSuccess?.('complete')
   }
 
   if (status === 'pending') {
+    if (compact) {
+      return (
+        <div className="flex items-center gap-2">
+          {error ? <span className="text-xs text-red-600">{error}</span> : null}
+          <button type="button" onClick={() => respond('approve')} disabled={pending !== null} title="Approve" className="cursor-pointer rounded-full p-1.5 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50">
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => respond('reject')} disabled={pending !== null} title="Decline" className="cursor-pointer rounded-full p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50">
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )
+    }
     return (
       <div className="mt-2 flex flex-col items-end gap-2">
         <div className="flex gap-2">
@@ -67,7 +86,17 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt }:
 
   if (status === 'confirmed' && new Date(endAt) <= new Date()) {
     if (teacherConfirmedAt) {
-      return <p className="mt-2 text-sm text-slate-500">Marked complete — awaiting admin confirmation for payout.</p>
+      return <p className={compact ? 'text-xs text-slate-500' : 'mt-2 text-sm text-slate-500'}>Awaiting admin confirmation for payout</p>
+    }
+    if (compact) {
+      return (
+        <div className="flex items-center gap-2">
+          {error ? <span className="text-xs text-red-600">{error}</span> : null}
+          <button type="button" onClick={markComplete} disabled={pending !== null} title="Mark session as completed" className="cursor-pointer rounded-full p-1.5 text-brand-600 hover:bg-brand-50 disabled:opacity-50">
+            <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )
     }
     return (
       <div className="mt-2 flex flex-col items-end gap-2">
