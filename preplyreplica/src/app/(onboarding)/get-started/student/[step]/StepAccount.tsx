@@ -10,7 +10,8 @@ import { useWizard } from '@/components/onboarding/WizardProvider'
 import { useStepGuard } from '@/components/onboarding/useStepGuard'
 
 export function StepAccount() {
-  useStepGuard('account')
+  const [submitted, setSubmitted] = useState(false)
+  useStepGuard('account', !submitted)
   const router = useRouter()
   const { state, reset } = useWizard()
   const [email, setEmail] = useState('')
@@ -46,6 +47,7 @@ export function StepAccount() {
       return
     }
 
+    setSubmitted(true)
     reset()
 
     if (result.needsEmailConfirmation) {
