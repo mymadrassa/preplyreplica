@@ -56,11 +56,14 @@ export async function GET(request: Request) {
   }
 
   const teacherIds = allTeachers.map((t) => t.id)
-  const [{ data: allSlots }, { data: allExceptions }] = await Promise.all([
-    supabase.from('availability_slots').select('teacher_id, weekday, start_time, end_time').in('teacher_id', teacherIds),
-    supabase.from('availability_exceptions').select('teacher_id, exception_date, start_time, end_time, kind').in('teacher_id', teacherIds),
-  ])
+  const { data: allSlots } = await supabase.from('availability_slots').select('teacher_id, weekday, start_time, end_time').in('teacher_id', teacherIds)
 
+  // Date-specific exceptions (vacation days, one-off busy blocks) are
+  // intentionally not factored into this score — they'd only ever shave a
+  // few points off a teacher's overlap for a date that isn't even the real
+  // lesson date yet (the wizard only collects a recurring weekly
+  // preference). Recurring weekly availability_slots alone is enough signal
+  // for this ranking step.
   const signals: TeacherSignal[] = allTeachers.map((teacher) => ({
     id: teacher.id,
     subjects: teacher.subjects ?? [],
@@ -68,7 +71,7 @@ export async function GET(request: Request) {
     ratingAvg: Number(teacher.rating_avg),
     ratingCount: teacher.rating_count,
     availabilitySlots: (allSlots ?? []).filter((s) => s.teacher_id === teacher.id),
-    availabilityExceptions: (allExceptions ?? []).filter((e) => e.teacher_id === teacher.id),
+    availabilityExceptions: [],
   }))
 
   const ranked = rankTeachersForStudent({ courses, weeklySlots, maxHourlyRate: parseResult.data.maxHourlyRate }, signals).slice(0, RESULT_LIMIT)
