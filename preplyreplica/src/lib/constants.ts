@@ -49,6 +49,10 @@ export const WEEKDAY_LABELS: Record<number, string> = Object.fromEntries(
 // POST /api/bookings.
 export const MIN_BOOKING_NOTICE_HOURS = 24
 
+// A student can cancel a confirmed booking for a full refund up until this
+// many hours before it starts.
+export const CANCELLATION_CUTOFF_HOURS = 12
+
 // Half-hour increments across a full day, e.g. "06:00" -> "6:00 AM".
 export const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const totalMinutes = i * 30
