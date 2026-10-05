@@ -15,9 +15,15 @@ export type CompleteSignupResult =
 // Shared by the direct registration page (browser client) and the
 // onboarding-wizard completion route (server client) so the anti-enumeration
 // handling and profiles upsert can't drift between the two entry points.
+//
+// `profilesClient` writes the profiles row and defaults to `supabase` itself.
+// Pass a service-role client instead when this project requires email
+// confirmation (no session exists yet right after signUp, so profiles' RLS
+// policy -- which checks auth.uid() = id -- would otherwise reject the write).
 export async function completeSignup(
   supabase: SupabaseClient<Database>,
-  { email, password, role, emailRedirectTo }: CompleteSignupParams
+  { email, password, role, emailRedirectTo }: CompleteSignupParams,
+  profilesClient: SupabaseClient<Database> = supabase
 ): Promise<CompleteSignupResult> {
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -46,7 +52,7 @@ export async function completeSignup(
     email,
     role,
   }
-  const { error: profileError } = await supabase.from('profiles').upsert(profile)
+  const { error: profileError } = await profilesClient.from('profiles').upsert(profile)
   if (profileError) {
     return { ok: false, status: 500, message: `Profile error: ${profileError.message}` }
   }

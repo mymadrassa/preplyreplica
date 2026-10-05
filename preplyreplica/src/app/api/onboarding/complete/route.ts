@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { completeSignup } from '@/lib/auth/completeSignup'
 
 const weeklySlotSchema = z.object({
@@ -34,18 +34,28 @@ export async function POST(request: Request) {
   const { email, password, courses, immediateAvailability, weeklySlots, rhythm, packageSize, selectedTeacherId } = parseResult.data
 
   const supabase = createServerClient()
-  const signupResult = await completeSignup(supabase, {
-    email,
-    password,
-    role: 'student',
-    emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-  })
+  // This project requires email confirmation, so signUp() returns no session
+  // yet -- auth.uid() is null until the student clicks the confirmation
+  // link. The bookkeeping writes below must still succeed immediately, so
+  // they go through the service-role client rather than the RLS-bound
+  // session client.
+  const serviceClient = createSupabaseServiceRoleClient()
+  const signupResult = await completeSignup(
+    supabase,
+    {
+      email,
+      password,
+      role: 'student',
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+    },
+    serviceClient
+  )
 
   if (!signupResult.ok) {
     return NextResponse.json({ error: signupResult.message }, { status: signupResult.status })
   }
 
-  const { error: preferencesError } = await supabase.from('student_preferences').upsert({
+  const { error: preferencesError } = await serviceClient.from('student_preferences').upsert({
     id: signupResult.userId,
     courses,
     immediate_availability: immediateAvailability,
@@ -59,7 +69,7 @@ export async function POST(request: Request) {
   }
 
   if (selectedTeacherId) {
-    await supabase.from('recommendation_events').insert({
+    await serviceClient.from('recommendation_events').insert({
       teacher_id: selectedTeacherId,
       event_type: 'selection',
       student_id: signupResult.hasSession ? signupResult.userId : null,
