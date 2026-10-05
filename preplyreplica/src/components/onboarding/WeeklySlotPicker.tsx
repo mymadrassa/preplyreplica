@@ -15,6 +15,13 @@ function slotKey(slot: WeeklySlot) {
   return `${slot.weekday}-${slot.start_time}-${slot.end_time}`
 }
 
+function formatHour(time: string) {
+  const [hours] = time.split(':').map(Number)
+  const period = hours < 12 ? 'AM' : 'PM'
+  const hours12 = hours % 12 === 0 ? 12 : hours % 12
+  return `${hours12}${period}`
+}
+
 export function WeeklySlotPicker({ value, onChange }: { value: WeeklySlot[]; onChange: (slots: WeeklySlot[]) => void }) {
   const selectedKeys = new Set(value.map(slotKey))
 
@@ -37,6 +44,9 @@ export function WeeklySlotPicker({ value, onChange }: { value: WeeklySlot[]; onC
             {TIME_BANDS.map((band) => (
               <th key={band.key} className="text-sm font-medium text-slate-500">
                 {band.label}
+                <span className="block text-xs font-normal text-slate-400">
+                  {formatHour(band.start_time)}–{formatHour(band.end_time)}
+                </span>
               </th>
             ))}
           </tr>
