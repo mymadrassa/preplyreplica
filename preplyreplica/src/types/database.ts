@@ -403,6 +403,100 @@ export type Database = {
           }
         ]
       }
+      student_preferences: {
+        Row: {
+          id: string
+          courses: string[]
+          immediate_availability: 'now' | 'this_week' | 'flexible'
+          weekly_slots: Json
+          lessons_per_week: number
+          monthly_package_size: number
+          selected_teacher_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          courses?: string[]
+          immediate_availability: 'now' | 'this_week' | 'flexible'
+          weekly_slots?: Json
+          lessons_per_week: number
+          monthly_package_size: number
+          selected_teacher_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          courses?: string[]
+          immediate_availability?: 'now' | 'this_week' | 'flexible'
+          weekly_slots?: Json
+          lessons_per_week?: number
+          monthly_package_size?: number
+          selected_teacher_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'student_preferences_id_fkey'
+            columns: ['id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'student_preferences_selected_teacher_id_fkey'
+            columns: ['selected_teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      recommendation_events: {
+        Row: {
+          id: number
+          student_id: string | null
+          teacher_id: string
+          event_type: 'impression' | 'selection'
+          score: number | null
+          rank: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          student_id?: string | null
+          teacher_id: string
+          event_type: 'impression' | 'selection'
+          score?: number | null
+          rank?: number | null
+          created_at?: string
+        }
+        Update: {
+          student_id?: string | null
+          teacher_id?: string
+          event_type?: 'impression' | 'selection'
+          score?: number | null
+          rank?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'recommendation_events_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'recommendation_events_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {}
     Functions: {}

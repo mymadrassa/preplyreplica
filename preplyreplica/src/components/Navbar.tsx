@@ -56,7 +56,7 @@ export async function Navbar() {
               <Link href="/auth/login" className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-px hover:border-slate-300 hover:shadow-sm md:inline-flex">
                 Login
               </Link>
-              <Link href="/auth/register">
+              <Link href="/get-started">
                 <Button className="hidden md:inline-flex">Sign up</Button>
               </Link>
             </>

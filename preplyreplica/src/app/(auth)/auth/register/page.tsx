@@ -1,10 +1,10 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(auth)/register/page.tsx
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
-import type { Database } from '@/types/database'
+import { completeSignup } from '@/lib/auth/completeSignup'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -12,10 +12,20 @@ import { Select } from '@/components/Select'
 import { FormMessage } from '@/components/FormMessage'
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  )
+}
+
+function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialRole = searchParams.get('role') === 'teacher' ? 'teacher' : 'student'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'student' | 'teacher'>('student')
+  const [role, setRole] = useState<'student' | 'teacher'>(initialRole)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const supabase = createBrowserClient()
@@ -25,52 +35,21 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signUp({
+    const result = await completeSignup(supabase, {
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: { role },
-      },
+      role,
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
     })
-    if (error) {
-      setError(error.message)
+
+    if (!result.ok) {
+      setError(result.message)
       setLoading(false)
       return
     }
 
-    // Supabase deliberately returns no error when the email already belongs
-    // to a confirmed account (anti-enumeration) — it returns a user object
-    // with an empty `identities` array instead. Without this check the flow
-    // falls through as if a brand-new signup succeeded.
-    if (data.user && data.user.identities && data.user.identities.length === 0) {
-      setError('An account with this email already exists. Please log in instead.')
-      setLoading(false)
-      return
-    }
-
-    if (data.user) {
-      const profile: Database['public']['Tables']['profiles']['Insert'] = {
-        id: data.user.id,
-        email,
-        role,
-      }
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert<Database['public']['Tables']['profiles']['Insert']>(profile)
-
-      if (profileError) {
-        setError(`Profile error: ${profileError.message}`)
-        setLoading(false)
-        return
-      }
-
-      if (data.session) {
-        router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
-      } else {
-        setLoading(false)
-      }
+    if (result.hasSession) {
+      router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
     } else {
       setLoading(false)
     }

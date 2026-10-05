@@ -49,7 +49,7 @@ export default function HomePage() {
               <Link href="/teachers">
                 <Button className="w-full sm:w-auto">Find tutors</Button>
               </Link>
-              <Link href="/auth/register">
+              <Link href="/get-started">
                 <Button variant="secondary" className="w-full sm:w-auto">Create an account</Button>
               </Link>
             </div>

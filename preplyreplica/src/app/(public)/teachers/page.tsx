@@ -55,7 +55,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-700">Teachers</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">Approved tutors available now</h1>
         </div>
-        <Link href="/auth/register">
+        <Link href="/auth/register?role=teacher">
           <span className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-900/10 transition-all hover:-translate-y-px hover:bg-brand-700 hover:shadow-md">
             Become a teacher
           </span>
