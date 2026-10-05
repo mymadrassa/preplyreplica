@@ -221,6 +221,7 @@ export type Database = {
           student_left_at: string | null
           teacher_joined_at: string | null
           teacher_left_at: string | null
+          is_trial: boolean
           created_at: string
         }
         Insert: {
@@ -250,6 +251,7 @@ export type Database = {
           student_left_at?: string | null
           teacher_joined_at?: string | null
           teacher_left_at?: string | null
+          is_trial?: boolean
           created_at?: string
         }
         Update: {
@@ -278,6 +280,7 @@ export type Database = {
           student_left_at?: string | null
           teacher_joined_at?: string | null
           teacher_left_at?: string | null
+          is_trial?: boolean
           created_at?: string
         }
         Relationships: [
