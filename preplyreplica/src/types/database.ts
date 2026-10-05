@@ -163,7 +163,7 @@ export type Database = {
           exception_date: string
           start_time: string | null
           end_time: string | null
-          kind: 'available' | 'busy' | 'vacation'
+          exception_type: 'blocked' | 'added'
           created_at: string
         }
         Insert: {
@@ -172,7 +172,7 @@ export type Database = {
           exception_date: string
           start_time?: string | null
           end_time?: string | null
-          kind: 'available' | 'busy' | 'vacation'
+          exception_type: 'blocked' | 'added'
           created_at?: string
         }
         Update: {
@@ -180,7 +180,7 @@ export type Database = {
           exception_date?: string
           start_time?: string | null
           end_time?: string | null
-          kind?: 'available' | 'busy' | 'vacation'
+          exception_type?: 'blocked' | 'added'
           created_at?: string
         }
         Relationships: [
