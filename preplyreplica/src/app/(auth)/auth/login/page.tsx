@@ -1,8 +1,8 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(auth)/login/page.tsx
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
@@ -10,8 +10,22 @@ import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
 import { FormMessage } from '@/components/FormMessage'
 
+const URL_ERROR_MESSAGES: Record<string, string> = {
+  link_expired: 'That confirmation link has expired or already been used. Please log in, or sign up again to get a new one.',
+}
+
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const urlError = URL_ERROR_MESSAGES[searchParams.get('error') ?? '']
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -77,6 +91,7 @@ export default function LoginPage() {
             Forgot password?
           </Link>
         </div>
+        {!error && urlError ? <FormMessage type="error">{urlError}</FormMessage> : null}
         {error ? <FormMessage type="error">{error}</FormMessage> : null}
         <Button type="submit" loading={loading}>Sign in</Button>
       </form>
