@@ -5,6 +5,7 @@ import { BookingForm } from '@/components/BookingForm'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RatingStars } from '@/components/RatingStars'
+import { ChatButton } from '@/components/chat/ChatButton'
 
 interface TeacherPageProps {
   params: {
@@ -139,6 +140,9 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
               <p className="text-slate-600">Pay securely with Stripe and join the Jitsi meeting when the lesson starts.</p>
             </div>
           </Card>
+          {viewerId && !isOwnProfile && viewerRole === 'student' ? (
+            <ChatButton studentId={viewerId} teacherId={teacher.id} teacherName={teacher.profiles?.full_name ?? 'this teacher'} />
+          ) : null}
           {canBook ? (
             <BookingForm
               teacher={{ id: teacher.id, hourly_rate: teacher.hourly_rate, subjects: teacher.subjects, languages: teacher.languages }}

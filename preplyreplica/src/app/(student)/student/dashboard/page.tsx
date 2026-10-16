@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { CalendarPlus, GraduationCap, ListChecks, Video } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
+import { TeacherCard } from '@/components/TeacherCard'
+import { fetchRankedTeachers } from '@/lib/teacherRecommendations'
+import type { StudentSignal } from '@/lib/recommendation'
 
 export default async function StudentDashboardPage() {
   const supabase = createServerClient()
@@ -24,6 +27,22 @@ export default async function StudentDashboardPage() {
     .order('start_at', { ascending: true })
     .limit(10)
 
+  // Only present if the student came through the onboarding wizard — direct
+  // /auth/register signups simply don't get this section, no placeholder.
+  const { data: preferences } = await supabase
+    .from('student_preferences')
+    .select('courses, weekly_slots')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const recommendedTeachers = preferences
+    ? await fetchRankedTeachers(
+        supabase,
+        { courses: preferences.courses, weeklySlots: (preferences.weekly_slots as StudentSignal['weeklySlots']) ?? [] },
+        6
+      )
+    : []
+
   return (
     <main className="container mx-auto px-4 py-12">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -42,6 +61,23 @@ export default async function StudentDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {recommendedTeachers.length ? (
+        <div className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-slate-900">Recommended for you</h2>
+            <Link href="/teachers" className="text-sm font-medium text-brand-600 hover:underline">
+              See all
+            </Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {recommendedTeachers.map((teacher) => (
+              <TeacherCard key={teacher.id} teacher={teacher} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <BookingsTable
         counterpartLabel="Teacher"
         emptyMessage="No bookings yet. Browse teachers to schedule your first lesson."

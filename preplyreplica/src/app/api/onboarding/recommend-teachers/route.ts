@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
-import { rankTeachersForStudent, type TeacherSignal } from '@/lib/recommendation'
+import { fetchRankedTeachers } from '@/lib/teacherRecommendations'
 
 const querySchema = z.object({
   courses: z.string().optional(),
@@ -18,9 +18,9 @@ const weeklySlotSchema = z.object({
 const RESULT_LIMIT = 20
 
 // Guest-accessible: the wizard's teacher-selection step runs before an
-// account exists, so this can't require auth. Reuses the same base query as
-// the public /teachers catalog (approved + payable), then ranks with
-// rankTeachersForStudent instead of the catalog's plain rating sort.
+// account exists, so this can't require auth. Ranking logic lives in
+// src/lib/teacherRecommendations.ts, shared with the student dashboard's
+// "Recommended for you" section.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const parseResult = querySchema.safeParse({
@@ -36,61 +36,14 @@ export async function GET(request: Request) {
   let weeklySlots: { weekday: number; start_time: string; end_time: string }[] = []
   if (parseResult.data.weeklySlots) {
     try {
-      const parsedSlots = z.array(weeklySlotSchema).parse(JSON.parse(parseResult.data.weeklySlots))
-      weeklySlots = parsedSlots
+      weeklySlots = z.array(weeklySlotSchema).parse(JSON.parse(parseResult.data.weeklySlots))
     } catch {
       return NextResponse.json({ error: 'Invalid weeklySlots' }, { status: 400 })
     }
   }
 
   const supabase = createServerClient()
-  const { data: teachers } = await supabase
-    .from('teacher_profiles')
-    .select('*, profiles(*)')
-    .eq('status', 'approved')
-    .eq('stripe_charges_enabled', true)
+  const teachers = await fetchRankedTeachers(supabase, { courses, weeklySlots, maxHourlyRate: parseResult.data.maxHourlyRate }, RESULT_LIMIT)
 
-  const allTeachers = teachers ?? []
-  if (!allTeachers.length) {
-    return NextResponse.json({ teachers: [] })
-  }
-
-  const teacherIds = allTeachers.map((t) => t.id)
-  const { data: allSlots } = await supabase.from('availability_slots').select('teacher_id, weekday, start_time, end_time').in('teacher_id', teacherIds)
-
-  // Date-specific exceptions (vacation days, one-off busy blocks) are
-  // intentionally not factored into this score — they'd only ever shave a
-  // few points off a teacher's overlap for a date that isn't even the real
-  // lesson date yet (the wizard only collects a recurring weekly
-  // preference). Recurring weekly availability_slots alone is enough signal
-  // for this ranking step.
-  const signals: TeacherSignal[] = allTeachers.map((teacher) => ({
-    id: teacher.id,
-    subjects: teacher.subjects ?? [],
-    hourlyRate: teacher.hourly_rate,
-    ratingAvg: Number(teacher.rating_avg),
-    ratingCount: teacher.rating_count,
-    availabilitySlots: (allSlots ?? []).filter((s) => s.teacher_id === teacher.id),
-    availabilityExceptions: [],
-  }))
-
-  const ranked = rankTeachersForStudent({ courses, weeklySlots, maxHourlyRate: parseResult.data.maxHourlyRate }, signals).slice(0, RESULT_LIMIT)
-
-  const byId = new Map(allTeachers.map((t) => [t.id, t]))
-  const results = ranked.map((r) => {
-    const teacher = byId.get(r.teacherId)!
-    return {
-      id: teacher.id,
-      full_name: teacher.profiles?.full_name ?? 'Teacher',
-      headline: teacher.headline,
-      rating_avg: Number(teacher.rating_avg),
-      hourly_rate: teacher.hourly_rate,
-      subjects: teacher.subjects,
-      languages: teacher.languages,
-      status: teacher.status,
-      score: r.score,
-    }
-  })
-
-  return NextResponse.json({ teachers: results })
+  return NextResponse.json({ teachers })
 }

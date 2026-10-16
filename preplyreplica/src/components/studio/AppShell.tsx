@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronsLeft, ChevronsRight, Menu, X, LayoutDashboard, CalendarCheck, Wallet, UserCircle, Search, type LucideIcon } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, Menu, X, LayoutDashboard, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, type LucideIcon } from 'lucide-react'
 import { AccountMenu } from '@/components/AccountMenu'
 
 interface StudioNavItem {
@@ -21,11 +21,13 @@ const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
   student: [
     { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/student/bookings', label: 'My bookings', icon: CalendarCheck },
+    { href: '/student/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teachers', label: 'Find a teacher', icon: Search },
   ],
   teacher: [
     { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/teacher/availability', label: 'Availability', icon: CalendarCheck },
+    { href: '/teacher/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teacher/earnings', label: 'Earnings', icon: Wallet },
     { href: '/teacher/onboarding', label: 'Profile', icon: UserCircle },
   ],
