@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     supabase.from('availability_slots').select('weekday, start_time, end_time').eq('teacher_id', params.id),
     supabase
       .from('availability_exceptions')
-      .select('exception_date, start_time, end_time, exception_type')
+      .select('exception_date, start_time, end_time, kind')
       .eq('teacher_id', params.id)
       .eq('exception_date', dateParam),
     supabase
@@ -70,7 +70,7 @@ async function getWeekRange(request: Request, teacherId: string) {
     supabase.from('availability_slots').select('weekday, start_time, end_time').eq('teacher_id', teacherId),
     supabase
       .from('availability_exceptions')
-      .select('exception_date, start_time, end_time, exception_type')
+      .select('exception_date, start_time, end_time, kind')
       .eq('teacher_id', teacherId)
       .gte('exception_date', weekStartParam)
       .lt('exception_date', weekEnd.toISOString().slice(0, 10)),

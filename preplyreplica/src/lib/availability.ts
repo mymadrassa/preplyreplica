@@ -8,7 +8,7 @@ export type AvailabilityException = {
   exception_date: string
   start_time: string | null
   end_time: string | null
-  exception_type: 'blocked' | 'added'
+  kind: 'available' | 'busy' | 'vacation'
 }
 export type OccupyingBooking = { start_at: string; end_at: string; status: string }
 
@@ -29,26 +29,44 @@ export function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+/** Splits [start, end) around a cut-out [cutStart, cutEnd), instead of dropping the whole range on any overlap. */
+function subtractRange(start: number, end: number, cutStart: number, cutEnd: number): [number, number][] {
+  if (!overlaps(start, end, cutStart, cutEnd)) return [[start, end]]
+  const pieces: [number, number][] = []
+  if (start < cutStart) pieces.push([start, cutStart])
+  if (end > cutEnd) pieces.push([cutEnd, end])
+  return pieces
+}
+
 /** The teacher's theoretically open windows for a given date (weekly slots, adjusted by that date's exceptions) — before considering existing bookings. */
 export function getOpenRanges(date: Date, slots: AvailabilitySlot[], exceptions: AvailabilityException[]): [number, number][] {
   const key = dateKey(date)
   const weekday = date.getDay()
-  const dayException = exceptions.find((exception) => exception.exception_date === key)
-  const blockedAllDay = dayException?.exception_type === 'blocked' && !dayException.start_time
+  // A date can carry several exceptions (e.g. a lunch-hour "busy" block and a
+  // separate evening "busy" block) — every one of them applies, not just the
+  // first found.
+  const dayExceptions = exceptions.filter((exception) => exception.exception_date === key)
+
+  // Legacy full-day exceptions (no start/end time) — the interactive calendar
+  // always supplies concrete times, but older rows may not.
+  const blockedAllDay = dayExceptions.some((exception) => exception.kind !== 'available' && !exception.start_time)
   if (blockedAllDay) return []
 
-  if (dayException?.exception_type === 'added' && dayException.start_time && dayException.end_time) {
-    return [[toMinutes(dayException.start_time), toMinutes(dayException.end_time)]]
-  }
+  const fullDayAvailable = dayExceptions.find((exception) => exception.kind === 'available' && !exception.start_time)
+  let ranges: [number, number][] = fullDayAvailable
+    ? [[0, 24 * 60]]
+    : slots
+        .filter((slot) => slot.weekday === weekday)
+        .map((slot): [number, number] => [toMinutes(slot.start_time), toMinutes(slot.end_time)])
 
-  let ranges = slots
-    .filter((slot) => slot.weekday === weekday)
-    .map((slot): [number, number] => [toMinutes(slot.start_time), toMinutes(slot.end_time)])
-
-  if (dayException?.exception_type === 'blocked' && dayException.start_time && dayException.end_time) {
-    const blockStart = toMinutes(dayException.start_time)
-    const blockEnd = toMinutes(dayException.end_time)
-    ranges = ranges.filter(([start, end]) => !overlaps(start, end, blockStart, blockEnd))
+  for (const exception of dayExceptions) {
+    if (!exception.start_time || !exception.end_time) continue
+    const excStart = toMinutes(exception.start_time)
+    const excEnd = toMinutes(exception.end_time)
+    ranges =
+      exception.kind === 'available'
+        ? [...ranges, [excStart, excEnd]]
+        : ranges.flatMap(([start, end]) => subtractRange(start, end, excStart, excEnd))
   }
 
   return ranges

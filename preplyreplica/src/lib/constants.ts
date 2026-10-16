@@ -44,13 +44,25 @@ export const WEEKDAY_LABELS: Record<number, string> = Object.fromEntries(
   WEEKDAYS.map((day) => [Number(day.value), day.label])
 )
 
+// The kinds of date-specific availability exceptions a teacher can mark on
+// their calendar, and the color each renders as. Extend this array (plus the
+// `availability_exceptions_kind_check` DB constraint) to add more kinds.
+export const EXCEPTION_KINDS = [
+  { value: 'available', label: 'Available', bg: '#6ee7b7', ring: '#059669' },
+  { value: 'busy', label: 'Busy', bg: '#fca5a5', ring: '#dc2626' },
+  { value: 'vacation', label: 'Vacation', bg: '#c4b5fd', ring: '#7c3aed' },
+] as const
+
+export type ExceptionKind = (typeof EXCEPTION_KINDS)[number]['value']
+
 // A booking's start time must be at least this far in the future — enforced
 // both when computing selectable slots and, authoritatively, server-side in
 // POST /api/bookings.
 export const MIN_BOOKING_NOTICE_HOURS = 24
 
 // A student can cancel a confirmed booking for a full refund up until this
-// many hours before it starts.
+// many hours before it starts — cancelling later (or not cancelling) forfeits
+// the payment. Enforced server-side in /api/bookings/[id]/cancel.
 export const CANCELLATION_CUTOFF_HOURS = 12
 
 // Half-hour increments across a full day, e.g. "06:00" -> "6:00 AM".

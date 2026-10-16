@@ -10,9 +10,12 @@ interface TeacherPageProps {
   params: {
     id: string
   }
+  searchParams: {
+    intent?: string
+  }
 }
 
-export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
+export default async function TeacherDetailsPage({ params, searchParams }: TeacherPageProps) {
   const supabase = createServerClient()
   const { data: teacher, error } = await supabase
     .from('teacher_profiles')
@@ -35,7 +38,26 @@ export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
     viewerRole = (viewerProfile as { role?: string } | null)?.role
   }
 
-  const canBook = !isOwnProfile && viewerRole !== 'teacher' && viewerRole !== 'admin'
+  // Admin approval and Stripe payout setup are independent — a teacher can
+  // be approved before finishing Stripe onboarding, so both are required
+  // before a student can actually get through checkout.
+  const canBook = !isOwnProfile && viewerRole !== 'teacher' && viewerRole !== 'admin' && teacher.stripe_charges_enabled
+
+  // A free trial is only offered for first contact with this teacher — any
+  // non-cancelled/rejected booking (trial or normal) already disqualifies
+  // them. Re-validated server-side again in /api/bookings before charging.
+  let isTrialEligible = false
+  if (canBook && viewerId) {
+    const { data: existingBooking } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('student_id', viewerId)
+      .eq('teacher_id', teacher.id)
+      .not('status', 'in', '(cancelled,rejected)')
+      .limit(1)
+      .maybeSingle()
+    isTrialEligible = !existingBooking
+  }
 
   return (
     <main className="container mx-auto px-4 py-12">
@@ -118,10 +140,18 @@ export default async function TeacherDetailsPage({ params }: TeacherPageProps) {
             </div>
           </Card>
           {canBook ? (
-            <BookingForm teacher={{ id: teacher.id, hourly_rate: teacher.hourly_rate, subjects: teacher.subjects, languages: teacher.languages }} />
+            <BookingForm
+              teacher={{ id: teacher.id, hourly_rate: teacher.hourly_rate, subjects: teacher.subjects, languages: teacher.languages }}
+              isTrialEligible={isTrialEligible}
+              defaultAsTrial={searchParams.intent === 'trial'}
+            />
           ) : isOwnProfile ? (
             <Card>
               <p className="text-slate-600">This is how students see your profile. Manage your details from your teacher dashboard.</p>
+            </Card>
+          ) : viewerRole !== 'teacher' && viewerRole !== 'admin' && !teacher.stripe_charges_enabled ? (
+            <Card>
+              <p className="text-slate-600">This teacher hasn't finished setting up payments yet and isn't accepting bookings right now. Check back soon.</p>
             </Card>
           ) : (
             <Card>

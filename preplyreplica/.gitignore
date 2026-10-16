@@ -18,3 +18,5 @@ blob-report
 playwright/.cache
 e2e/.fixtures.json
 *.tsbuildinfo
+
+supabase/.temp/

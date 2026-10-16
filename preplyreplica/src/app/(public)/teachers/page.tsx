@@ -25,6 +25,11 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
     .from('teacher_profiles')
     .select('*, profiles(*)')
     .eq('status', 'approved')
+    // Approval only reflects the admin's review of the profile — a teacher
+    // can be approved before finishing Stripe onboarding. Only list ones who
+    // can actually be paid, so a student never lands on a "book" flow that
+    // fails at the last step.
+    .eq('stripe_charges_enabled', true)
     .order('rating_avg', { ascending: false })
 
   const allTeachers = teachers ?? []

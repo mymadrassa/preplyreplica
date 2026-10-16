@@ -29,7 +29,15 @@ export async function POST(request: Request) {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session
-    if (session.payment_status !== 'paid') {
+    // This booking flow authorizes now and captures later (manual capture,
+    // once the teacher approves) — Checkout's own `payment_status` field
+    // only becomes 'paid' once the charge is actually captured, so it stays
+    // 'unpaid' right after a completely normal, successful checkout and
+    // this guard was skipping every single booking. `status === 'complete'`
+    // is what actually confirms checkout succeeded regardless of capture
+    // timing (a failed/abandoned checkout wouldn't fire this event at all —
+    // that's checkout.session.expired / payment_intent.payment_failed).
+    if (session.status !== 'complete') {
       return NextResponse.json({ received: true })
     }
 
@@ -49,7 +57,16 @@ export async function POST(request: Request) {
       // Payment is authorized (manual capture), not charged yet — the
       // booking waits on the teacher's approval before any money moves.
       await supabase.from('bookings').update({ status: 'pending' } as Database['public']['Tables']['bookings']['Update']).eq('id', payment.booking_id)
-      await supabase.from('payments').update({ status: 'authorized' } as Database['public']['Tables']['payments']['Update']).eq('id', payment.id)
+      await supabase
+        .from('payments')
+        .update({
+          status: 'authorized',
+          // Backfill — the payment_intent isn't always available synchronously
+          // when the Checkout Session (and this row) is first created, but by
+          // the time checkout completes it's guaranteed to exist.
+          stripe_payment_intent_id: payment.stripe_payment_intent_id ?? (session.payment_intent as string),
+        } as Database['public']['Tables']['payments']['Update'])
+        .eq('id', payment.id)
 
       if (booking?.student_id) {
         const { data: profile } = await supabase.from('profiles').select('pending_stripe_fees').eq('id', booking.student_id).single()

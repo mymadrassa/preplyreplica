@@ -1,9 +1,56 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAvailableStartTimes, getSlotStates, type AvailabilitySlot, type OccupyingBooking } from '../availability'
+import { getAvailableStartTimes, getOpenRanges, getSlotStates, type AvailabilityException, type AvailabilitySlot, type OccupyingBooking } from '../availability'
 
 function slotForDate(date: Date, start: string, end: string): AvailabilitySlot {
   return { weekday: date.getDay(), start_time: start, end_time: end }
 }
+
+function exceptionOn(date: Date, kind: AvailabilityException['kind'], start: string | null, end: string | null): AvailabilityException {
+  return { exception_date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`, kind, start_time: start, end_time: end }
+}
+
+describe('getOpenRanges', () => {
+  it('subtracts only the blocked sub-interval instead of dropping the whole weekly range', () => {
+    const date = new Date(2026, 7, 13)
+    const slots = [slotForDate(date, '09:00', '17:00')]
+    const exceptions = [exceptionOn(date, 'busy', '12:00', '13:00')]
+    const ranges = getOpenRanges(date, slots, exceptions)
+    expect(ranges).toEqual([
+      [9 * 60, 12 * 60],
+      [13 * 60, 17 * 60],
+    ])
+  })
+
+  it('applies every exception on a date, not just the first one', () => {
+    const date = new Date(2026, 7, 13)
+    const slots = [slotForDate(date, '09:00', '17:00')]
+    const exceptions = [exceptionOn(date, 'busy', '12:00', '13:00'), exceptionOn(date, 'busy', '15:00', '16:00')]
+    const ranges = getOpenRanges(date, slots, exceptions)
+    expect(ranges).toEqual([
+      [9 * 60, 12 * 60],
+      [13 * 60, 15 * 60],
+      [16 * 60, 17 * 60],
+    ])
+  })
+
+  it('an "available" exception adds a range on top of the weekly schedule', () => {
+    const date = new Date(2026, 7, 13)
+    const slots = [slotForDate(date, '09:00', '12:00')]
+    const exceptions = [exceptionOn(date, 'available', '18:00', '19:00')]
+    const ranges = getOpenRanges(date, slots, exceptions)
+    expect(ranges).toEqual([
+      [9 * 60, 12 * 60],
+      [18 * 60, 19 * 60],
+    ])
+  })
+
+  it('a full-day non-available exception blocks the whole date', () => {
+    const date = new Date(2026, 7, 13)
+    const slots = [slotForDate(date, '09:00', '17:00')]
+    const exceptions = [exceptionOn(date, 'vacation', null, null)]
+    expect(getOpenRanges(date, slots, exceptions)).toEqual([])
+  })
+})
 
 describe('getAvailableStartTimes — minNoticeHours', () => {
   beforeEach(() => {

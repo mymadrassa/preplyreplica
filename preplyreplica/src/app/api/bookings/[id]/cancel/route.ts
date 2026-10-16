@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { refundBookingPayment } from '@/lib/stripe'
 import { sendBookingCancelledEmail } from '@/lib/email'
-
-const CANCELLATION_CUTOFF_HOURS = 12
+import { CANCELLATION_CUTOFF_HOURS } from '@/lib/constants'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()

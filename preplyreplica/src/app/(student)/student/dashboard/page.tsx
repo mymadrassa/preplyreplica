@@ -1,9 +1,8 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(student)/dashboard/page.tsx
 import Link from 'next/link'
-import { CalendarPlus, CalendarX2, GraduationCap, ListChecks, Video } from 'lucide-react'
+import { CalendarPlus, GraduationCap, ListChecks, Video } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
-import { Card } from '@/components/Card'
-import { StatusBadge } from '@/components/StatusBadge'
+import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
 
 export default async function StudentDashboardPage() {
   const supabase = createServerClient()
@@ -43,43 +42,36 @@ export default async function StudentDashboardPage() {
           </Link>
         </div>
       </div>
-      <div className="grid gap-6">
-        {bookings?.length ? (
-          bookings.map((booking) => (
-            <Card key={booking.id}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{booking.subject}</p>
-                  <h2 className="text-xl font-semibold text-slate-900">{booking.teacher_profiles?.profiles?.full_name}</h2>
-                  <p className="text-slate-600">{new Date(booking.start_at).toLocaleString()} · {booking.duration} min</p>
-                </div>
-                <div className="text-right">
-                  <StatusBadge status={booking.status} />
-                  {booking.status === 'confirmed' ? (
-                    <div className="mt-2 flex flex-col items-end gap-1">
-                      <Link href={`/session/${booking.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline">
-                        <Video className="h-4 w-4" aria-hidden="true" />
-                        Join session
-                      </Link>
-                      <a href={`/api/bookings/${booking.id}/calendar`} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
-                        <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-                        Add to calendar
-                      </a>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </Card>
-          ))
-        ) : (
-          <Card>
-            <div className="flex items-center gap-3 text-slate-600">
-              <CalendarX2 className="h-5 w-5 text-slate-400" aria-hidden="true" />
-              <p>No bookings yet. Browse teachers to schedule your first lesson.</p>
-            </div>
-          </Card>
+      <BookingsTable
+        counterpartLabel="Teacher"
+        emptyMessage="No bookings yet. Browse teachers to schedule your first lesson."
+        rows={(bookings ?? []).map(
+          (booking): BookingRow => ({
+            id: booking.id,
+            subject: booking.subject,
+            startAt: booking.start_at,
+            status: booking.status,
+            counterpartName: booking.teacher_profiles?.profiles?.full_name ?? null,
+            counterpartAvatarUrl: booking.teacher_profiles?.profiles?.avatar_url,
+            counterpartHref: booking.teacher_profiles?.id ? `/teachers/${booking.teacher_profiles.id}` : undefined,
+            isTrial: booking.is_trial,
+          })
         )}
-      </div>
+        renderActions={(row) => {
+          const booking = bookings?.find((b) => b.id === row.id)
+          if (!booking || booking.status !== 'confirmed') return null
+          return (
+            <>
+              <Link href={`/session/${booking.id}`} title="Join session" className="text-brand-700 hover:text-brand-800">
+                <Video className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <a href={`/api/bookings/${booking.id}/calendar`} title="Add to calendar" className="text-brand-600 hover:text-brand-700">
+                <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </>
+          )
+        }}
+      />
     </main>
   )
 }

@@ -22,10 +22,15 @@ export interface PricingBreakdown {
  * commission. The Stripe fee itself is not charged per-transaction to
  * either party; it's tracked separately (see profiles.pending_stripe_fees)
  * and billed to the student on their next booking instead.
+ *
+ * When isTrial is true (a student's first-ever session with a given
+ * teacher, see /api/bookings), the platform waives its commission entirely
+ * — the student pays exactly the teacher's base rate, and the teacher still
+ * receives that same base rate.
  */
-export function calculatePricing(teacherRate: number, durationHours: number): PricingBreakdown {
+export function calculatePricing(teacherRate: number, durationHours: number, isTrial = false): PricingBreakdown {
   const baseAmount = round2(teacherRate * durationHours)
-  const platformCommission = round2(baseAmount * PLATFORM_COMMISSION_RATE)
+  const platformCommission = isTrial ? 0 : round2(baseAmount * PLATFORM_COMMISSION_RATE)
   const totalStudentPays = round2(baseAmount + platformCommission)
   const estimatedStripeFee = round2(totalStudentPays * STRIPE_PERCENTAGE_FEE + STRIPE_FIXED_FEE)
   const teacherReceives = baseAmount

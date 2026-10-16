@@ -23,15 +23,19 @@ export async function Navbar() {
 
   let dashboardHref = '/'
   let profileHref: string | undefined
+  let userName: string | null = null
+  let avatarUrl: string | null = null
   if (session?.user?.id) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, full_name, email, avatar_url')
       .eq('id', session.user.id)
       .single()
     const role = (profile as { role: 'student' | 'teacher' | 'admin' } | null)?.role
     dashboardHref = (role && dashboardByRole[role]) || '/'
     profileHref = role ? profileByRole[role] : undefined
+    userName = profile?.full_name || profile?.email?.split('@')[0] || null
+    avatarUrl = profile?.avatar_url ?? null
   }
 
   return (
@@ -50,7 +54,7 @@ export async function Navbar() {
         </nav>
         <div className="flex items-center gap-3">
           {session?.user ? (
-            <AccountMenu dashboardHref={dashboardHref} profileHref={profileHref} />
+            <AccountMenu dashboardHref={dashboardHref} profileHref={profileHref} userName={userName} avatarUrl={avatarUrl} />
           ) : (
             <>
               <Link href="/auth/login" className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-px hover:border-slate-300 hover:shadow-sm md:inline-flex">
