@@ -17,7 +17,9 @@ export function StepProfile() {
   const { state, patch } = useTeacherWizard()
 
   const MIN_HEADLINE = 10
+  const MAX_HEADLINE = 100
   const MIN_BIO = 20
+  const MAX_BIO = 1000
   const headlineLength = state.headline.trim().length
   const bioLength = state.bio.trim().length
   const canContinue = headlineLength >= MIN_HEADLINE && bioLength >= MIN_BIO
@@ -39,11 +41,12 @@ export function StepProfile() {
             name="headline"
             value={state.headline}
             onChange={(event) => patch({ headline: event.target.value })}
-            placeholder="e.g. Certified Spanish tutor with 5 years of experience"
+            placeholder="e.g. Certified Spanish tutor with 5 years of experience, specializing in conversational fluency"
+            maxLength={MAX_HEADLINE}
             required
           />
           <p className={`mt-1 text-xs ${headlineLength >= MIN_HEADLINE ? 'text-slate-500' : 'text-amber-600'}`}>
-            {headlineLength}/{MIN_HEADLINE} characters minimum
+            {headlineLength}/{MAX_HEADLINE} characters — {MIN_HEADLINE} minimum
           </p>
         </div>
         <div>
@@ -53,11 +56,16 @@ export function StepProfile() {
             rows={6}
             value={state.bio}
             onChange={(event) => patch({ bio: event.target.value })}
-            placeholder="Share your teaching style, experience, and what students can expect from your lessons."
+            placeholder={
+              "e.g. Hi, I'm Maria! I've been teaching Spanish for 5 years, helping beginners build real conversational " +
+              'confidence. My lessons are relaxed and tailored to your goals, with plenty of speaking practice and ' +
+              'real-life scenarios — not just grammar drills. Looking forward to working with you!'
+            }
+            maxLength={MAX_BIO}
             required
           />
           <p className={`mt-1 text-xs ${bioLength >= MIN_BIO ? 'text-slate-500' : 'text-amber-600'}`}>
-            {bioLength}/{MIN_BIO} characters minimum
+            {bioLength}/{MAX_BIO} characters — {MIN_BIO} minimum
           </p>
         </div>
       </div>

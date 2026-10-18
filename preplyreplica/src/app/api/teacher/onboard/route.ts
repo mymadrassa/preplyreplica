@@ -5,8 +5,8 @@ import { createServerClient } from '@/lib/supabase/server'
 import { createTeacherConnectAccount, createTeacherConnectAccountLink } from '@/lib/stripe'
 
 const onboardSchema = z.object({
-  headline: z.string().min(10),
-  bio: z.string().min(20),
+  headline: z.string().min(10).max(100),
+  bio: z.string().min(20).max(1000),
   languages: z.string().array().min(1),
   subjects: z.string().array().min(1),
   hourly_rate: z.coerce.number().min(10),
