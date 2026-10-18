@@ -11,7 +11,7 @@ export interface CompleteSignupParams {
 
 export type CompleteSignupResult =
   | { ok: true; userId: string; hasSession: boolean }
-  // `message` is user-facing (already mapped via toFriendlyAuthMessage);
+  // `message` is user-facing (already mapped via toFriendlyAuthError);
   // `rawMessage` is the original provider error, kept around so callers can
   // log the real technical detail without showing it to the user.
   | { ok: false; status: number; message: string; rawMessage: string }
@@ -37,7 +37,12 @@ export async function completeSignup(
 
   if (error) {
     const { message, status } = toFriendlyAuthError(error.message)
-    return { ok: false, status, message, rawMessage: error.message }
+    // supabase-js's AuthRetryableFetchError carries an empty "{}" .message
+    // for some server-side failures (e.g. the auth email provider
+    // rejecting a send) -- fall back to name+status so the logged detail
+    // is actually useful instead of just "{}".
+    const rawMessage = error.message && error.message !== '{}' ? error.message : `${error.name} (status ${error.status})`
+    return { ok: false, status, message, rawMessage }
   }
 
   // Supabase deliberately returns no error when the email already belongs to
