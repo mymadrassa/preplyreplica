@@ -3,8 +3,6 @@ import { Button } from '@/components/Button'
 import { AccountMenu } from '@/components/AccountMenu'
 import { createServerClient } from '@/lib/supabase/server'
 
-const navLinks = [{ href: '/teachers', label: 'Teachers' }]
-
 const dashboardByRole: Record<string, string> = {
   student: '/student/dashboard',
   teacher: '/teacher/dashboard',
@@ -45,13 +43,6 @@ export async function Navbar() {
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">P</span>
           Preply Clone
         </Link>
-        <nav className="hidden items-center gap-8 md:flex">
-          {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900">
-              {link.label}
-            </Link>
-          ))}
-        </nav>
         <div className="flex items-center gap-3">
           {session?.user ? (
             <AccountMenu dashboardHref={dashboardHref} profileHref={profileHref} userName={userName} avatarUrl={avatarUrl} />
