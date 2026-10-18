@@ -1,10 +1,11 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/dashboard/page.tsx
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { AlertTriangle, CalendarClock, CalendarDays, CalendarPlus, ClipboardCheck, Pencil, Star, Video, Wallet } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CalendarPlus, ClipboardCheck, PartyPopper, Star, Video, Wallet } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ApprovalTimeline, buildTeacherApprovalSteps } from '@/components/ApprovalTimeline'
 import { StripeOnboardingSuccessBanner } from '@/components/StripeOnboardingSuccessBanner'
 import { BookingActions } from '@/components/BookingActions'
 import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
@@ -32,27 +33,22 @@ export default async function TeacherDashboardPage({
     redirect('/teacher/onboarding')
   }
 
+  // The approval timeline stays visible (all-green) for exactly one visit
+  // after approval -- the moment the teacher is actually notified in-app,
+  // alongside the congratulations email sent from /api/teacher/validate --
+  // then disappears on every visit after that.
+  const justApproved = teacher.status === 'approved' && !teacher.approval_seen_at
+  const showTimeline = teacher.status !== 'approved' || justApproved
+
+  if (justApproved) {
+    await supabase.from('teacher_profiles').update({ approval_seen_at: new Date().toISOString() }).eq('id', userId)
+  }
+
   return (
     <main className="container mx-auto px-4 py-12">
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Teacher dashboard</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your teaching schedule</h1>
-        </div>
-        <div className="flex gap-3">
-          <Link href="/teacher/onboarding" className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-            Edit profile
-          </Link>
-          <Link href="/teacher/earnings" className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:border-slate-400 hover:bg-slate-50">
-            <Wallet className="h-4 w-4" aria-hidden="true" />
-            Earnings
-          </Link>
-          <Link href="/teacher/availability" className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600">
-            <CalendarClock className="h-4 w-4" aria-hidden="true" />
-            Manage availability
-          </Link>
-        </div>
+      <div className="mb-8">
+        <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Teacher dashboard</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your teaching schedule</h1>
       </div>
       {!teacher?.stripe_charges_enabled ? (
         <div className="mb-8 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -68,6 +64,22 @@ export default async function TeacherDashboardPage({
         </div>
       ) : searchParams.stripe_onboarding === 'success' ? (
         <StripeOnboardingSuccessBanner />
+      ) : null}
+      {justApproved ? (
+        <div className="mb-8 flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-6">
+          <PartyPopper className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" aria-hidden="true" />
+          <p className="text-emerald-900">
+            <strong>Congratulations — your profile is approved!</strong> You're now visible to students and can start accepting bookings.
+          </p>
+        </div>
+      ) : null}
+      {showTimeline ? (
+        <Card className="mb-8">
+          <p className="mb-6 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Approval progress</p>
+          <ApprovalTimeline
+            steps={buildTeacherApprovalSteps({ status: teacher.status ?? 'pending', stripe_charges_enabled: !!teacher.stripe_charges_enabled })}
+          />
+        </Card>
       ) : null}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>

@@ -207,6 +207,27 @@ export async function sendPayoutReviewTimedOutTeacherEmail({
   )
 }
 
+/** Sent to the teacher the moment an admin approves their profile — the one email tied to the approval-timeline's "admin review" step going green. */
+export async function sendTeacherApprovedEmail({
+  to,
+  teacherName,
+  dashboardUrl,
+}: {
+  to: string
+  teacherName: string
+  dashboardUrl: string
+}) {
+  await sendEmail(
+    to,
+    `You're approved! Your profile is now live`,
+    `
+      <p>Hi ${teacherName},</p>
+      <p>Congratulations — your profile has been approved and is now visible to students.</p>
+      <p><a href="${dashboardUrl}">Go to your dashboard</a></p>
+    `
+  )
+}
+
 /** Sent to admins once a teacher marks a session complete — payout is on hold until an admin also confirms. */
 export async function sendAwaitingAdminReviewEmail({
   to,
