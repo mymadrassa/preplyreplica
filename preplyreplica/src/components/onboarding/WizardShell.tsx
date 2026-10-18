@@ -1,9 +1,10 @@
 import { Button } from '@/components/Button'
 
-const STEPS = ['course', 'availability-now', 'availability-weekly', 'rhythm', 'package', 'teacher'] as const
+const STUDENT_STEPS = ['course', 'availability-now', 'availability-weekly', 'rhythm', 'package', 'teacher'] as const
 
 export function WizardShell({
   step,
+  steps = STUDENT_STEPS,
   title,
   subtitle,
   children,
@@ -13,7 +14,9 @@ export function WizardShell({
   nextDisabled = false,
   nextLoading = false,
 }: {
-  step: (typeof STEPS)[number]
+  step: string
+  /** Defaults to the student wizard's step order; pass a different array to reuse this shell for another wizard (e.g. the teacher onboarding flow). */
+  steps?: readonly string[]
   title: string
   subtitle?: string
   children: React.ReactNode
@@ -23,8 +26,8 @@ export function WizardShell({
   nextDisabled?: boolean
   nextLoading?: boolean
 }) {
-  const currentIndex = STEPS.indexOf(step)
-  const progressPercent = ((currentIndex + 1) / STEPS.length) * 100
+  const currentIndex = steps.indexOf(step)
+  const progressPercent = ((currentIndex + 1) / steps.length) * 100
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl flex-col px-4 py-12 sm:px-6">
@@ -32,7 +35,7 @@ export function WizardShell({
         <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${progressPercent}%` }} />
       </div>
       <p className="mt-3 text-sm font-medium text-slate-500">
-        Step {currentIndex + 1} of {STEPS.length}
+        Step {currentIndex + 1} of {steps.length}
       </p>
 
       <h1 className="mt-4 text-3xl font-bold text-slate-900">{title}</h1>

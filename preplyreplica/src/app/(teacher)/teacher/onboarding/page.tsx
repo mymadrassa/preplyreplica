@@ -20,6 +20,12 @@ export default async function TeacherOnboardingPage() {
     .eq('id', userId)
     .single()
 
+  // Brand-new teacher, no profile saved yet — send them through the
+  // step-by-step wizard instead of the flat edit form below.
+  if (!profile) {
+    redirect('/teacher/onboarding/subjects')
+  }
+
   return (
     <main className="container mx-auto max-w-3xl px-4 py-12">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
