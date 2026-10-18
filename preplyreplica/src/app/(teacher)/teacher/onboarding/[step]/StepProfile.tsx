@@ -43,15 +43,11 @@ export function StepProfile() {
             onChange={(event) => patch({ headline: event.target.value })}
             placeholder="e.g. Certified Spanish tutor with 5 years of experience, specializing in conversational fluency"
             maxLength={MAX_HEADLINE}
-            className="pr-24"
+            className="pr-28"
             required
           />
-          <span
-            className={`pointer-events-none absolute bottom-2.5 right-3 rounded-full bg-white px-1.5 text-xs ${
-              headlineLength >= MIN_HEADLINE ? 'text-slate-400' : 'text-amber-600'
-            }`}
-          >
-            {headlineLength >= MIN_HEADLINE ? `${headlineLength} chars` : `min ${MIN_HEADLINE}`}
+          <span className="pointer-events-none absolute bottom-2.5 right-3 rounded-full bg-white px-1.5 text-xs text-slate-400">
+            {headlineLength >= MIN_HEADLINE ? `${headlineLength} chars` : `min ${MIN_HEADLINE} characters`}
           </span>
         </div>
         <div className="relative">
@@ -69,12 +65,8 @@ export function StepProfile() {
             maxLength={MAX_BIO}
             required
           />
-          <span
-            className={`pointer-events-none absolute bottom-2.5 right-3 rounded-full bg-white px-1.5 text-xs ${
-              bioLength >= MIN_BIO ? 'text-slate-400' : 'text-amber-600'
-            }`}
-          >
-            {bioLength >= MIN_BIO ? `${bioLength} chars` : `min ${MIN_BIO}`}
+          <span className="pointer-events-none absolute bottom-2.5 right-3 rounded-full bg-white px-1.5 text-xs text-slate-400">
+            {bioLength >= MIN_BIO ? `${bioLength} chars` : `min ${MIN_BIO} characters`}
           </span>
         </div>
       </div>
