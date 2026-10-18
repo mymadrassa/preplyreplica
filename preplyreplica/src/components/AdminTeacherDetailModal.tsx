@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { StatusBadge } from '@/components/StatusBadge'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 import { Avatar } from '@/components/Avatar'
 
 type Action = 'approve' | 'reject' | 'suspend' | 'reset'
@@ -54,12 +54,11 @@ export function AdminTeacherDetailModal({
   onClose,
 }: AdminTeacherDetailModalProps) {
   const router = useRouter()
+  const { showToast } = useToast()
   const [status, setStatus] = useState(initialStatus)
   const [pendingAction, setPendingAction] = useState<Action | null>(null)
-  const [error, setError] = useState('')
 
   async function handleAction(action: Action) {
-    setError('')
     setPendingAction(action)
     const response = await fetch('/api/teacher/validate', {
       method: 'POST',
@@ -69,7 +68,7 @@ export function AdminTeacherDetailModal({
     const result = await response.json()
     setPendingAction(null)
     if (!response.ok) {
-      setError(result.error || 'Unable to update status')
+      showToast('error', result.error || 'Unable to update status')
       return
     }
     setStatus(STATUS_OPTIONS.find((option) => option.action === action)!.status)
@@ -169,7 +168,6 @@ export function AdminTeacherDetailModal({
             </Button>
           ))}
         </div>
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
       </div>
     </div>
   )

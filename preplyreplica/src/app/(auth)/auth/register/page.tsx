@@ -8,6 +8,7 @@ import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
 import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 export default function RegisterPage() {
   return (
@@ -24,15 +25,14 @@ function RegisterForm() {
   // teacher"/"I'm a student" choice on /get-started) -- asking again on this
   // form would just be re-asking a question already answered.
   const role = searchParams.get('role') === 'teacher' ? 'teacher' : 'student'
+  const { showToast } = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [confirmationNeeded, setConfirmationNeeded] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     setLoading(true)
 
     const response = await fetch('/api/auth/register', {
@@ -43,7 +43,7 @@ function RegisterForm() {
     const data = await response.json()
 
     if (!response.ok) {
-      setError(data.error)
+      showToast('error', data.error)
       logClientError('register', data.error)
       setLoading(false)
       return
@@ -82,7 +82,6 @@ function RegisterForm() {
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
         <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
         <Button type="submit" loading={loading}>Create account</Button>
       </form>
     </main>

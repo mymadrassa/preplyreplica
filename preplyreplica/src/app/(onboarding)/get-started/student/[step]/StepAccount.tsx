@@ -6,6 +6,7 @@ import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
 import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 import { useWizard } from '@/components/onboarding/WizardProvider'
 import { useStepGuard } from '@/components/onboarding/useStepGuard'
 
@@ -13,16 +14,15 @@ export function StepAccount() {
   const [submitted, setSubmitted] = useState(false)
   useStepGuard('account', !submitted)
   const router = useRouter()
+  const { showToast } = useToast()
   const { state, reset } = useWizard()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [confirmationNeeded, setConfirmationNeeded] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     setLoading(true)
 
     const response = await fetch('/api/onboarding/complete', {
@@ -42,7 +42,7 @@ export function StepAccount() {
 
     const result = await response.json()
     if (!response.ok) {
-      setError(result.error || 'Something went wrong creating your account.')
+      showToast('error', result.error || 'Something went wrong creating your account.')
       setLoading(false)
       return
     }
@@ -77,7 +77,6 @@ export function StepAccount() {
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
         <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
         <Button type="submit" loading={loading}>
           Create account
         </Button>

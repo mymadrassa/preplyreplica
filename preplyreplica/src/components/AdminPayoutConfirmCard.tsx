@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, Wallet } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 interface AdminPayoutConfirmCardProps {
   bookingId: string
@@ -29,17 +29,16 @@ export function AdminPayoutConfirmCard({
   teacherJoinedAt,
 }: AdminPayoutConfirmCardProps) {
   const router = useRouter()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
   async function confirm() {
-    setError('')
     setLoading(true)
     const response = await fetch(`/api/admin/bookings/${bookingId}/confirm-completion`, { method: 'POST' })
     const result = await response.json()
     setLoading(false)
     if (!response.ok) {
-      setError(result.error || 'Unable to confirm this session.')
+      showToast('error', result.error || 'Unable to confirm this session.')
       return
     }
     router.refresh()
@@ -68,7 +67,6 @@ export function AdminPayoutConfirmCard({
           <Button type="button" onClick={confirm} loading={loading} disabled={loading}>
             <Wallet className="h-4 w-4" aria-hidden="true" /> Confirm & release payout
           </Button>
-          {error ? <FormMessage type="error">{error}</FormMessage> : null}
         </div>
       </div>
     </Card>

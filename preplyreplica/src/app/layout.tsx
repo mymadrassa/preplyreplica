@@ -1,6 +1,7 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/layout.tsx
 import type { Metadata } from 'next'
 import './globals.css'
+import { ToastProvider } from '@/components/ToastProvider'
 
 export const metadata: Metadata = {
   title: 'Preply Clone',
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-muted-50 text-slate-900 antialiased">
-        <div className="min-h-screen bg-muted-50">{children}</div>
+        <ToastProvider>
+          <div className="min-h-screen bg-muted-50">{children}</div>
+        </ToastProvider>
       </body>
     </html>
   )

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/Button'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 interface BookingActionsProps {
   bookingId: string
@@ -20,11 +20,10 @@ interface BookingActionsProps {
 /** Teacher-facing actions for a single booking: approve/reject a pending request, or mark a finished session complete. */
 export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, compact = false, onSuccess }: BookingActionsProps) {
   const router = useRouter()
+  const { showToast } = useToast()
   const [pending, setPending] = useState<'approve' | 'reject' | 'complete' | null>(null)
-  const [error, setError] = useState('')
 
   async function respond(action: 'approve' | 'reject') {
-    setError('')
     setPending(action)
     const response = await fetch(`/api/bookings/${bookingId}/respond`, {
       method: 'POST',
@@ -34,7 +33,7 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, c
     const result = await response.json()
     setPending(null)
     if (!response.ok) {
-      setError(result.error || 'Unable to process this response.')
+      showToast('error', result.error || 'Unable to process this response.')
       return
     }
     router.refresh()
@@ -42,13 +41,12 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, c
   }
 
   async function markComplete() {
-    setError('')
     setPending('complete')
     const response = await fetch(`/api/bookings/${bookingId}/complete`, { method: 'POST' })
     const result = await response.json()
     setPending(null)
     if (!response.ok) {
-      setError(result.error || 'Unable to mark this session as complete.')
+      showToast('error', result.error || 'Unable to mark this session as complete.')
       return
     }
     router.refresh()
@@ -59,7 +57,6 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, c
     if (compact) {
       return (
         <div className="flex items-center gap-2">
-          {error ? <span className="text-xs text-red-600">{error}</span> : null}
           <button type="button" onClick={() => respond('approve')} disabled={pending !== null} title="Approve" className="cursor-pointer rounded-full p-1.5 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -79,7 +76,6 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, c
             <XCircle className="h-4 w-4" aria-hidden="true" /> Decline
           </Button>
         </div>
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
       </div>
     )
   }
@@ -91,7 +87,6 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, c
     if (compact) {
       return (
         <div className="flex items-center gap-2">
-          {error ? <span className="text-xs text-red-600">{error}</span> : null}
           <button type="button" onClick={markComplete} disabled={pending !== null} title="Mark session as completed" className="cursor-pointer rounded-full p-1.5 text-brand-600 hover:bg-brand-50 disabled:opacity-50">
             <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -103,7 +98,6 @@ export function BookingActions({ bookingId, status, endAt, teacherConfirmedAt, c
         <Button type="button" variant="secondary" onClick={markComplete} loading={pending === 'complete'} disabled={pending !== null}>
           <ClipboardCheck className="h-4 w-4" aria-hidden="true" /> Mark session as completed
         </Button>
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
       </div>
     )
   }

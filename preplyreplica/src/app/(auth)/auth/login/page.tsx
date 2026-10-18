@@ -1,14 +1,14 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(auth)/login/page.tsx
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 const URL_ERROR_MESSAGES: Record<string, string> = {
   link_expired: 'That confirmation link has expired or already been used. Please log in, or sign up again to get a new one.',
@@ -25,28 +25,34 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { showToast } = useToast()
   const urlError = URL_ERROR_MESSAGES[searchParams.get('error') ?? '']
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const supabase = createBrowserClient()
 
+  useEffect(() => {
+    if (urlError) showToast('error', urlError)
+    // Only on the initial query-param check -- showToast is stable, and we
+    // don't want this re-firing on every re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     setLoading(true)
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setError(error.message)
+      showToast('error', error.message)
       setLoading(false)
       return
     }
 
     const userId = data?.user?.id
     if (!userId) {
-      setError('Unable to sign in. Please try again.')
+      showToast('error', 'Unable to sign in. Please try again.')
       setLoading(false)
       return
     }
@@ -60,7 +66,7 @@ function LoginForm() {
     const profileData = profileResult.data as { role: 'student' | 'teacher' | 'admin' } | null
 
     if (profileResult.error || !profileData?.role) {
-      setError('Unable to determine your role. Please contact support.')
+      showToast('error', 'Unable to determine your role. Please contact support.')
       setLoading(false)
       return
     }
@@ -91,8 +97,6 @@ function LoginForm() {
             Forgot password?
           </Link>
         </div>
-        {!error && urlError ? <FormMessage type="error">{urlError}</FormMessage> : null}
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
         <Button type="submit" loading={loading}>Sign in</Button>
       </form>
     </main>

@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Info, Gift } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { Select } from '@/components/Select'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 import { AvailabilityCalendar } from '@/components/AvailabilityCalendar'
 import { CANCELLATION_CUTOFF_HOURS, MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
 import { calculatePricing } from '@/lib/pricing'
@@ -29,6 +29,7 @@ function dateKeyLocal(date: Date) {
 }
 
 export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial = false }: BookingFormProps) {
+  const { showToast } = useToast()
   const [subject, setSubject] = useState(teacher.subjects?.[0] || '')
   const [language, setLanguage] = useState(teacher.languages?.[0] || '')
   const [duration, setDuration] = useState('60')
@@ -38,7 +39,6 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
   const [exceptions, setExceptions] = useState<AvailabilityException[]>([])
   const [bookings, setBookings] = useState<OccupyingBooking[]>([])
   const [loadingWeek, setLoadingWeek] = useState(true)
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const loadWeek = useCallback(
@@ -70,10 +70,9 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
 
     if (!selectedStart) {
-      setError('Please pick a time on the calendar.')
+      showToast('error', 'Please pick a time on the calendar.')
       return
     }
 
@@ -96,7 +95,7 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
     setLoading(false)
 
     if (!response.ok) {
-      setError(result.error || 'Failed to create booking.')
+      showToast('error', result.error || 'Failed to create booking.')
       return
     }
 
@@ -162,7 +161,6 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
         </p>
       </div>
 
-      {error ? <FormMessage type="error">{error}</FormMessage> : null}
       <Button type="submit" loading={loading} disabled={!selectedStart}>{loading ? 'Processing…' : 'Continue to payment'}</Button>
     </form>
   )

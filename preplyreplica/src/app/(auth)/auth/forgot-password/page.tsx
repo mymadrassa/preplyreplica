@@ -5,18 +5,17 @@ import { MailCheck } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 export default function ForgotPasswordPage() {
+  const { showToast } = useToast()
   const [email, setEmail] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const supabase = createBrowserClient()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     setLoading(true)
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -25,7 +24,7 @@ export default function ForgotPasswordPage() {
 
     setLoading(false)
     if (error) {
-      setError(error.message)
+      showToast('error', error.message)
       return
     }
     setSent(true)
@@ -48,7 +47,6 @@ export default function ForgotPasswordPage() {
       ) : (
         <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
           <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          {error ? <FormMessage type="error">{error}</FormMessage> : null}
           <Button type="submit" loading={loading}>Send reset link</Button>
         </form>
       )}

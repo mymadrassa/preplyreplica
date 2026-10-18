@@ -4,22 +4,21 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { XCircle } from 'lucide-react'
 import { Button } from '@/components/Button'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 export function CancelBookingButton({ bookingId }: { bookingId: string }) {
   const router = useRouter()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [confirming, setConfirming] = useState(false)
 
   async function cancel() {
-    setError('')
     setLoading(true)
     const response = await fetch(`/api/bookings/${bookingId}/cancel`, { method: 'POST' })
     const result = await response.json()
     setLoading(false)
     if (!response.ok) {
-      setError(result.error || 'Unable to cancel this booking.')
+      showToast('error', result.error || 'Unable to cancel this booking.')
       return
     }
     router.refresh()
@@ -37,7 +36,6 @@ export function CancelBookingButton({ bookingId }: { bookingId: string }) {
             Yes, cancel
           </Button>
         </div>
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
       </div>
     )
   }

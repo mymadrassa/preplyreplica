@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Trash2, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { Select } from '@/components/Select'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 import { EXCEPTION_KINDS, TIME_OPTIONS, type ExceptionKind } from '@/lib/constants'
 
 function minutesToTimeValue(minutes: number) {
@@ -36,12 +36,12 @@ export function AvailabilityExceptionPopover({
   onSaved,
   onPreviewChange,
 }: AvailabilityExceptionPopoverProps) {
+  const { showToast } = useToast()
   const [startTime, setStartTime] = useState(minutesToTimeValue(startMinutes))
   const [endTime, setEndTime] = useState(minutesToTimeValue(endMinutes))
   const [selectedKind, setSelectedKind] = useState<ExceptionKind>(kind)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState('')
 
   const dateLabel = date.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
 
@@ -61,9 +61,8 @@ export function AvailabilityExceptionPopover({
   }
 
   async function handleSave() {
-    setError('')
     if (startTime >= endTime) {
-      setError('End time must be after start time.')
+      showToast('error', 'End time must be after start time.')
       return
     }
     setSaving(true)
@@ -79,7 +78,7 @@ export function AvailabilityExceptionPopover({
     const result = await response.json()
     setSaving(false)
     if (!response.ok) {
-      setError(result.error || 'Unable to save.')
+      showToast('error', result.error || 'Unable to save.')
       return
     }
     onSaved()
@@ -87,13 +86,12 @@ export function AvailabilityExceptionPopover({
 
   async function handleDelete() {
     if (!exceptionId) return
-    setError('')
     setDeleting(true)
     const response = await fetch(`/api/teacher/availability/exceptions/${exceptionId}`, { method: 'DELETE' })
     setDeleting(false)
     if (!response.ok) {
       const result = await response.json()
-      setError(result.error || 'Unable to delete.')
+      showToast('error', result.error || 'Unable to delete.')
       return
     }
     onSaved()
@@ -136,8 +134,6 @@ export function AvailabilityExceptionPopover({
             ))}
           </div>
         </div>
-
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
 
         <div className="flex items-center justify-between gap-2">
           {mode === 'edit' ? (

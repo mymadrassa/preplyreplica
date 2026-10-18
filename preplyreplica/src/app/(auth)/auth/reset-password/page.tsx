@@ -5,26 +5,25 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { PasswordInput } from '@/components/PasswordInput'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const supabase = createBrowserClient()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.')
+      showToast('error', 'Password must be at least 6 characters.')
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.')
+      showToast('error', 'Passwords do not match.')
       return
     }
 
@@ -33,7 +32,7 @@ export default function ResetPasswordPage() {
     setLoading(false)
 
     if (error) {
-      setError(error.message)
+      showToast('error', error.message)
       return
     }
 
@@ -49,7 +48,6 @@ export default function ResetPasswordPage() {
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
         <PasswordInput label="New password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
         <PasswordInput label="Confirm new password" name="confirmPassword" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
-        {error ? <FormMessage type="error">{error}</FormMessage> : null}
         <Button type="submit" loading={loading}>Update password</Button>
       </form>
     </main>
