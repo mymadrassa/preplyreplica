@@ -1,8 +1,8 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/components/Input.tsx
-export function Input({ label, className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+export function Input({ label, className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: React.ReactNode }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
-      <span>{label}</span>
+      <span className="flex items-center gap-1.5">{label}</span>
       <input
         className={`mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 ${className}`}
         {...props}

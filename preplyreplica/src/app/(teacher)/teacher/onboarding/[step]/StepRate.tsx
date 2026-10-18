@@ -11,7 +11,7 @@ import { TEACHER_WIZARD_STEPS } from './steps'
 // processing fee (1.5% + £0.20) on top of everything else -- this isn't an
 // arbitrary number, it's the line above which the platform's own costs are
 // definitely covered, no matter the lesson length.
-const MIN_RATE = 10
+const MIN_RATE = 8
 
 export function StepRate() {
   useTeacherStepGuard('rate')

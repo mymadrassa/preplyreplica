@@ -39,6 +39,12 @@ export type Database = {
       teacher_profiles: {
         Row: {
           id: string
+          // Leftover from a pre-0001 legacy schema that keyed this table by
+          // user_id instead of id -- 0001_init.sql's `create table if not
+          // exists` silently skipped this already-existing table, so the
+          // column (NOT NULL, no default) is still live today. Always equal
+          // to `id` in practice; every insert must set it explicitly.
+          user_id: string
           headline: string | null
           bio: string | null
           languages: string[]
@@ -51,10 +57,12 @@ export type Database = {
           status: 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg: number
           rating_count: number
+          approval_seen_at: string | null
           updated_at: string
         }
         Insert: {
           id: string
+          user_id: string
           headline?: string | null
           bio?: string | null
           languages?: string[]
@@ -67,9 +75,11 @@ export type Database = {
           status?: 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg?: number
           rating_count?: number
+          approval_seen_at?: string | null
           updated_at?: string
         }
         Update: {
+          user_id?: string
           headline?: string | null
           bio?: string | null
           languages?: string[]
@@ -82,6 +92,7 @@ export type Database = {
           status?: 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg?: number
           rating_count?: number
+          approval_seen_at?: string | null
           updated_at?: string
         }
         Relationships: [

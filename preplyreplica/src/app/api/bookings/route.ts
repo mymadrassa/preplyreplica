@@ -115,7 +115,10 @@ export async function POST(request: Request) {
   // covered by reducing the application fee accordingly, and recouped from
   // the student later rather than split per-transaction — see lib/pricing.ts.
   const pricing = calculatePricing(teacher.hourly_rate, duration / 60, isTrial)
-  const amount = Math.max(500, toPence(pricing.totalStudentPays) + toPence(pendingFeesOwed))
+  // 30p is Stripe's own minimum charge for GBP (below it, Stripe's own fee
+  // could exceed the charge) -- not a business-chosen floor, so it's the
+  // lowest this can safely go without Stripe rejecting the payment outright.
+  const amount = Math.max(30, toPence(pricing.totalStudentPays) + toPence(pendingFeesOwed))
   const teacherFee = toPence(pricing.teacherReceives)
   const commissionAfterFee = Math.max(0, toPence(pricing.platformCommission) - toPence(pricing.estimatedStripeFee))
   const applicationFeeAmount = commissionAfterFee + toPence(pendingFeesOwed)

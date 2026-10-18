@@ -9,6 +9,10 @@ export interface TeacherWizardState {
   bio: string
   hourlyRate: string
   videoUrl: string
+  // Set right after a successful submit, once the wizard's other fields
+  // have already been reset -- the one piece of state StepPayouts needs
+  // to know whether there's a real Stripe setup link to offer.
+  onboardingUrl: string | null
 }
 
 const EMPTY_STATE: TeacherWizardState = {
@@ -18,6 +22,7 @@ const EMPTY_STATE: TeacherWizardState = {
   bio: '',
   hourlyRate: '25',
   videoUrl: '',
+  onboardingUrl: null,
 }
 
 // Separate storage key from the student wizard's -- a teacher and a student

@@ -7,6 +7,7 @@ import { StepLanguages } from './StepLanguages'
 import { StepProfile } from './StepProfile'
 import { StepRate } from './StepRate'
 import { StepMedia } from './StepMedia'
+import { StepPayouts } from './StepPayouts'
 
 export default function TeacherOnboardingStepPage({ params }: { params: { step: string } }) {
   const step = params.step as TeacherWizardStep
@@ -25,6 +26,8 @@ export default function TeacherOnboardingStepPage({ params }: { params: { step: 
       return <StepRate />
     case 'media':
       return <StepMedia />
+    case 'payouts':
+      return <StepPayouts />
     default:
       return notFound()
   }

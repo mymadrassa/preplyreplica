@@ -6,8 +6,12 @@ import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { TextArea } from '@/components/TextArea'
-import { FormMessage } from '@/components/FormMessage'
+import { useToast } from '@/components/ToastProvider'
 import { SUBJECTS, LANGUAGES } from '@/lib/constants'
+import { normalizeVideoUrl } from '@/lib/videoUrl'
+import { InfoTooltip } from '@/components/InfoTooltip'
+
+const VIDEO_HELP_TEXT = 'Supported: YouTube, Vimeo, or Google Drive links, or a video file uploaded during onboarding. Please keep it to 90 seconds or less.'
 
 function toggleValue(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
@@ -15,6 +19,7 @@ function toggleValue(list: string[], value: string) {
 
 export function TeacherOnboardingForm({ existingProfile }: any) {
   const supabase = createBrowserClient()
+  const { showToast } = useToast()
   const [headline, setHeadline] = useState(existingProfile?.headline || '')
   const [bio, setBio] = useState(existingProfile?.bio || '')
   const [languages, setLanguages] = useState<string[]>(existingProfile?.languages || ['English'])
@@ -22,10 +27,13 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
   const [hourlyRate, setHourlyRate] = useState(existingProfile?.hourly_rate?.toString() || '25')
   const [videoUrl, setVideoUrl] = useState(existingProfile?.video_url || '')
   const [documents, setDocuments] = useState<FileList | null>(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loadingAction, setLoadingAction] = useState<'save' | 'stripe' | null>(null)
   const stripeAlreadySetUp = existingProfile?.stripe_charges_enabled === true
+
+  const trimmedVideoUrl = videoUrl.trim()
+  const isOwnUpload = trimmedVideoUrl.includes('/storage/v1/object/public/teacher-videos/')
+  const normalizedVideo = !isOwnUpload && trimmedVideoUrl ? normalizeVideoUrl(trimmedVideoUrl) : null
+  const videoUrlInvalid = trimmedVideoUrl !== '' && !isOwnUpload && normalizedVideo === null
 
   async function uploadDocuments(files: FileList) {
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_TEACHER_DOCS || 'teacher-documents'
@@ -44,20 +52,21 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
     return paths
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError('')
-    setSuccess('')
-
+  async function submit(startStripeOnboarding: boolean) {
     if (languages.length === 0 || subjects.length === 0) {
-      setError('Select at least one language and one subject.')
+      showToast('error', 'Select at least one language and one subject.')
+      return
+    }
+    if (videoUrlInvalid) {
+      showToast('error', 'That video link is not supported. Paste a YouTube, Vimeo, or Google Drive link.')
       return
     }
 
-    setLoading(true)
+    setLoadingAction(startStripeOnboarding ? 'stripe' : 'save')
 
     try {
       const documentPaths = documents ? await uploadDocuments(documents) : []
+      const resolvedVideoUrl = isOwnUpload ? trimmedVideoUrl : normalizedVideo?.embedUrl ?? ''
       const response = await fetch('/api/teacher/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,15 +76,16 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
           languages,
           subjects,
           hourly_rate: Number(hourlyRate),
-          video_url: videoUrl,
+          video_url: resolvedVideoUrl,
           document_paths: documentPaths,
+          start_stripe_onboarding: startStripeOnboarding,
         }),
       })
 
       const data = await response.json()
       if (!response.ok) {
-        setError(data.error || 'Unable to submit onboarding.')
-        setLoading(false)
+        showToast('error', data.error || 'Unable to submit onboarding.')
+        setLoadingAction(null)
         return
       }
 
@@ -84,12 +94,17 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
         return
       }
 
-      setSuccess('Profile updated.')
-      setLoading(false)
+      showToast('success', 'Profile updated.')
+      setLoadingAction(null)
     } catch (err: any) {
-      setError(err.message || 'Upload failed.')
-      setLoading(false)
+      showToast('error', err.message || 'Upload failed.')
+      setLoadingAction(null)
     }
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    submit(false)
   }
 
   return (
@@ -144,15 +159,34 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
         </div>
         {subjects.length === 0 ? <p className="mt-2 text-xs text-red-600">Select at least one subject.</p> : null}
       </div>
-      <Input label="Hourly rate" name="hourlyRate" type="number" min={10} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
-      <Input
-        label="Intro video URL (optional)"
-        name="videoUrl"
-        type="url"
-        value={videoUrl}
-        onChange={(event) => setVideoUrl(event.target.value)}
-        placeholder="https://www.youtube.com/embed/..."
-      />
+      <Input label="Hourly rate" name="hourlyRate" type="number" min={8} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
+      <div>
+        <Input
+          label={
+            <>
+              Intro video URL (optional)
+              <InfoTooltip text={VIDEO_HELP_TEXT} />
+            </>
+          }
+          name="videoUrl"
+          type="url"
+          value={videoUrl}
+          onChange={(event) => setVideoUrl(event.target.value)}
+          placeholder="https://www.youtube.com/watch?v=... or a Google Drive / Vimeo share link"
+        />
+        {videoUrlInvalid ? <p className="mt-1 text-xs text-red-600">We only support YouTube, Vimeo, or Google Drive links right now.</p> : null}
+        {normalizedVideo ? (
+          <iframe
+            className="mt-3 h-48 w-full rounded-2xl border border-slate-200"
+            src={normalizedVideo.embedUrl}
+            title="Video preview"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : isOwnUpload ? (
+          <video controls className="mt-3 h-48 w-full rounded-2xl border border-slate-200 bg-slate-950" src={trimmedVideoUrl} />
+        ) : null}
+      </div>
       <div>
         <label className="block text-sm font-medium text-slate-700">Verification documents (optional)</label>
         <p className="mt-1 text-xs text-slate-500">
@@ -161,11 +195,22 @@ export function TeacherOnboardingForm({ existingProfile }: any) {
         </p>
         <input type="file" accept="application/pdf,image/*" multiple onChange={(event) => setDocuments(event.target.files)} className="mt-2 w-full text-sm text-slate-700" />
       </div>
-      {error ? <FormMessage type="error">{error}</FormMessage> : null}
-      {success ? <FormMessage type="success">{success}</FormMessage> : null}
-      <Button type="submit" loading={loading}>
-        {loading ? 'Saving…' : stripeAlreadySetUp ? 'Save changes' : 'Save and continue Stripe onboarding'}
-      </Button>
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" loading={loadingAction === 'save'} disabled={loadingAction === 'stripe'}>
+          Save changes
+        </Button>
+        {!stripeAlreadySetUp ? (
+          <Button
+            type="button"
+            variant="secondary"
+            loading={loadingAction === 'stripe'}
+            disabled={loadingAction === 'save'}
+            onClick={() => submit(true)}
+          >
+            Continue Stripe onboarding
+          </Button>
+        ) : null}
+      </div>
     </form>
   )
 }
