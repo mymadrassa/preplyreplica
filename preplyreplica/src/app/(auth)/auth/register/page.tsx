@@ -28,6 +28,7 @@ function RegisterForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [confirmationNeeded, setConfirmationNeeded] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -51,8 +52,20 @@ function RegisterForm() {
     if (data.hasSession) {
       router.push(role === 'teacher' ? '/teacher/onboarding' : '/student/dashboard')
     } else {
+      // Email confirmation is required and no session exists yet -- there's
+      // nowhere to redirect to, so say so instead of leaving the form
+      // looking like it silently did nothing.
+      setConfirmationNeeded(true)
       setLoading(false)
     }
+  }
+
+  if (confirmationNeeded) {
+    return (
+      <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
+        <FormMessage type="success">Check your email to confirm your account, then log in to continue.</FormMessage>
+      </main>
+    )
   }
 
   return (
