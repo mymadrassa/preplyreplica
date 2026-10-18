@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
-import { toFriendlyAuthMessage } from '@/lib/errorMessages'
+import { toFriendlyAuthError } from '@/lib/errorMessages'
 
 export interface CompleteSignupParams {
   email: string
@@ -36,7 +36,8 @@ export async function completeSignup(
   })
 
   if (error) {
-    return { ok: false, status: 400, message: toFriendlyAuthMessage(error.message), rawMessage: error.message }
+    const { message, status } = toFriendlyAuthError(error.message)
+    return { ok: false, status, message, rawMessage: error.message }
   }
 
   // Supabase deliberately returns no error when the email already belongs to
