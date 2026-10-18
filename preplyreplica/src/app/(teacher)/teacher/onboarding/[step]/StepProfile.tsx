@@ -16,7 +16,11 @@ export function StepProfile() {
   const router = useRouter()
   const { state, patch } = useTeacherWizard()
 
-  const canContinue = state.headline.trim().length >= 10 && state.bio.trim().length >= 20
+  const MIN_HEADLINE = 10
+  const MIN_BIO = 20
+  const headlineLength = state.headline.trim().length
+  const bioLength = state.bio.trim().length
+  const canContinue = headlineLength >= MIN_HEADLINE && bioLength >= MIN_BIO
 
   return (
     <WizardShell
@@ -29,23 +33,33 @@ export function StepProfile() {
       nextDisabled={!canContinue}
     >
       <div className="grid gap-5">
-        <Input
-          label="Headline"
-          name="headline"
-          value={state.headline}
-          onChange={(event) => patch({ headline: event.target.value })}
-          placeholder="e.g. Certified Spanish tutor with 5 years of experience"
-          required
-        />
-        <TextArea
-          label="Bio"
-          name="bio"
-          rows={6}
-          value={state.bio}
-          onChange={(event) => patch({ bio: event.target.value })}
-          placeholder="Share your teaching style, experience, and what students can expect from your lessons."
-          required
-        />
+        <div>
+          <Input
+            label="Headline"
+            name="headline"
+            value={state.headline}
+            onChange={(event) => patch({ headline: event.target.value })}
+            placeholder="e.g. Certified Spanish tutor with 5 years of experience"
+            required
+          />
+          <p className={`mt-1 text-xs ${headlineLength >= MIN_HEADLINE ? 'text-slate-500' : 'text-amber-600'}`}>
+            {headlineLength}/{MIN_HEADLINE} characters minimum
+          </p>
+        </div>
+        <div>
+          <TextArea
+            label="Bio"
+            name="bio"
+            rows={6}
+            value={state.bio}
+            onChange={(event) => patch({ bio: event.target.value })}
+            placeholder="Share your teaching style, experience, and what students can expect from your lessons."
+            required
+          />
+          <p className={`mt-1 text-xs ${bioLength >= MIN_BIO ? 'text-slate-500' : 'text-amber-600'}`}>
+            {bioLength}/{MIN_BIO} characters minimum
+          </p>
+        </div>
       </div>
     </WizardShell>
   )
