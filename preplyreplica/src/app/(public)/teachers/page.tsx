@@ -1,6 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(public)/teachers/page.tsx
 import Link from 'next/link'
-import { createServerClient } from '@/lib/supabase/server'
+import { getTeacherCatalogue } from '@/lib/teacherCatalogue'
 import { TeacherCard } from '@/components/TeacherCard'
 import { Select } from '@/components/Select'
 import { Input } from '@/components/Input'
@@ -20,19 +20,7 @@ interface TeachersPageProps {
 // of role (student, teacher, admin, or logged out) — only the booking
 // action itself is restricted to students, on the individual teacher page.
 export default async function TeachersPage({ searchParams }: TeachersPageProps) {
-  const supabase = createServerClient()
-  const { data: teachers } = await supabase
-    .from('teacher_profiles')
-    .select('*, profiles(*)')
-    .eq('status', 'approved')
-    // Approval only reflects the admin's review of the profile — a teacher
-    // can be approved before finishing Stripe onboarding. Only list ones who
-    // can actually be paid, so a student never lands on a "book" flow that
-    // fails at the last step.
-    .eq('stripe_charges_enabled', true)
-    .order('rating_avg', { ascending: false })
-
-  const allTeachers = teachers ?? []
+  const allTeachers = await getTeacherCatalogue()
   const subjectOptions = SUBJECTS
   const languageOptions = LANGUAGES
 

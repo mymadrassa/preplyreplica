@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import clsx from 'clsx'
 import { WizardShell } from '@/components/onboarding/WizardShell'
 import { RatingStars } from '@/components/RatingStars'
+import { LoadingBlock } from '@/components/LoadingBlock'
 import { useWizard } from '@/components/onboarding/WizardProvider'
 import { useStepGuard } from '@/components/onboarding/useStepGuard'
 
@@ -72,7 +73,7 @@ export function StepTeacher() {
       nextLabel={state.selectedTeacherId ? 'Continue' : "I'll choose later"}
     >
       {loading ? (
-        <p className="text-slate-500">Finding teachers for you…</p>
+        <LoadingBlock label="Finding teachers for you…" />
       ) : teachers.length ? (
         <div className="grid gap-3">
           {teachers.map((teacher) => (

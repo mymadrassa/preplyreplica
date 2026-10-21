@@ -6,6 +6,7 @@ import { Info, Gift } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { Select } from '@/components/Select'
 import { useToast } from '@/components/ToastProvider'
+import { LoadingBlock } from '@/components/LoadingBlock'
 import { AvailabilityCalendar } from '@/components/AvailabilityCalendar'
 import { CANCELLATION_CUTOFF_HOURS, MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
 import { calculatePricing } from '@/lib/pricing'
@@ -135,7 +136,11 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
 
       <div>
         <span className="mb-2 block text-sm font-medium text-slate-700">Pick a time</span>
-        {loadingWeek ? <p className="mb-2 text-sm text-slate-500">Loading availability…</p> : null}
+        {loadingWeek ? (
+          <div className="mb-2">
+            <LoadingBlock inline label="Loading availability…" />
+          </div>
+        ) : null}
         <AvailabilityCalendar
           mode="booking"
           slots={slots}

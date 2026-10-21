@@ -20,20 +20,17 @@ export default async function StudentDashboardPage() {
     )
   }
 
-  const { data: bookings } = await supabase
-    .from('bookings')
-    .select('*, teacher_profiles(*, profiles(*))')
-    .eq('student_id', userId)
-    .order('start_at', { ascending: true })
-    .limit(10)
-
-  // Only present if the student came through the onboarding wizard — direct
-  // /auth/register signups simply don't get this section, no placeholder.
-  const { data: preferences } = await supabase
-    .from('student_preferences')
-    .select('courses, weekly_slots')
-    .eq('id', userId)
-    .maybeSingle()
+  // Preferences are only present if the student came through the onboarding
+  // wizard — direct /auth/register signups simply don't get that section.
+  const [{ data: bookings }, { data: preferences }] = await Promise.all([
+    supabase
+      .from('bookings')
+      .select('*, teacher_profiles(*, profiles(*))')
+      .eq('student_id', userId)
+      .order('start_at', { ascending: true })
+      .limit(10),
+    supabase.from('student_preferences').select('courses, weekly_slots').eq('id', userId).maybeSingle(),
+  ])
 
   const recommendedTeachers = preferences
     ? await fetchRankedTeachers(

@@ -26,26 +26,39 @@ interface TeacherPageProps {
 
 export default async function TeacherDetailsPage({ params, searchParams }: TeacherPageProps) {
   const supabase = createServerClient()
-  const { data: teacher, error } = await supabase
-    .from('teacher_profiles')
-    .select('*, profiles(*), reviews(*, profiles!student_id(full_name))')
-    .eq('id', params.id)
-    .order('created_at', { referencedTable: 'reviews', ascending: false })
-    .single()
+  const session = await supabase.auth.getSession()
+  const viewerId = session.data?.session?.user?.id
+  const isOwnProfile = viewerId === params.id
+  const isOtherViewer = !!viewerId && !isOwnProfile
+
+  // The teacher, the viewer's role and any existing booking between them don't
+  // depend on each other, so they're fetched together in one round trip. The
+  // booking lookup is only used below if the viewer turns out to be able to book.
+  const [{ data: teacher, error }, viewerProfileResult, existingBookingResult] = await Promise.all([
+    supabase
+      .from('teacher_profiles')
+      .select('*, profiles(*), reviews(*, profiles!student_id(full_name))')
+      .eq('id', params.id)
+      .order('created_at', { referencedTable: 'reviews', ascending: false })
+      .single(),
+    isOtherViewer ? supabase.from('profiles').select('role').eq('id', viewerId).single() : null,
+    isOtherViewer
+      ? supabase
+          .from('bookings')
+          .select('id')
+          .eq('student_id', viewerId)
+          .eq('teacher_id', params.id)
+          .not('status', 'in', '(cancelled,rejected)')
+          .limit(1)
+          .maybeSingle()
+      : null,
+  ])
 
   if (error || !teacher || teacher.status !== 'approved') {
     return notFound()
   }
 
-  const session = await supabase.auth.getSession()
-  const viewerId = session.data?.session?.user?.id
-  const isOwnProfile = viewerId === teacher.id
-
-  let viewerRole: string | undefined
-  if (viewerId && !isOwnProfile) {
-    const { data: viewerProfile } = await supabase.from('profiles').select('role').eq('id', viewerId).single()
-    viewerRole = (viewerProfile as { role?: string } | null)?.role
-  }
+  const viewerRole = (viewerProfileResult?.data as { role?: string } | null | undefined)?.role
 
   // Admin approval and Stripe payout setup are independent — a teacher can
   // be approved before finishing Stripe onboarding, so both are required
@@ -55,18 +68,7 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
   // A free trial is only offered for first contact with this teacher — any
   // non-cancelled/rejected booking (trial or normal) already disqualifies
   // them. Re-validated server-side again in /api/bookings before charging.
-  let isTrialEligible = false
-  if (canBook && viewerId) {
-    const { data: existingBooking } = await supabase
-      .from('bookings')
-      .select('id')
-      .eq('student_id', viewerId)
-      .eq('teacher_id', teacher.id)
-      .not('status', 'in', '(cancelled,rejected)')
-      .limit(1)
-      .maybeSingle()
-    isTrialEligible = !existingBooking
-  }
+  const isTrialEligible = canBook && !!viewerId && !existingBookingResult?.data
 
   return (
     <main className="container mx-auto px-4 py-12">

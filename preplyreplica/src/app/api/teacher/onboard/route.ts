@@ -1,5 +1,7 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/api/teacher/onboard/route.ts
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
+import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { createTeacherConnectAccount, createTeacherConnectAccountLink } from '@/lib/stripe'
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  revalidateTag(TEACHER_CATALOGUE_TAG)
 
   if (document_paths?.length) {
     await supabase.from('teacher_documents').insert(

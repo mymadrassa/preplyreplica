@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Send } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/Avatar'
+import { LoadingBlock } from '@/components/LoadingBlock'
 
 interface Message {
   id: string
@@ -86,7 +87,7 @@ export function ChatThread({
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {loading ? (
-          <p className="text-sm text-slate-500">Loading conversation…</p>
+          <LoadingBlock label="Loading conversation…" />
         ) : messages.length ? (
           messages.map((message) => {
             const isMine = message.sender_id === currentUserId

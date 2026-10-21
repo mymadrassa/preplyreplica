@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronsLeft, ChevronsRight, Menu, X, LayoutDashboard, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, type LucideIcon } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, Loader2, Menu, X, LayoutDashboard, BookOpen, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, type LucideIcon } from 'lucide-react'
 import { AccountMenu } from '@/components/AccountMenu'
 
 interface StudioNavItem {
   href: string
   label: string
   icon: LucideIcon
+  /** Active only on this exact path, not on pages beneath it (e.g. /student/mushaf is yours alone; /student/mushaf/<teacher> is a shared session). */
+  exact?: boolean
 }
 
 export type StudioRole = 'student' | 'teacher' | 'admin'
@@ -20,12 +22,14 @@ export type StudioRole = 'student' | 'teacher' | 'admin'
 const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
   student: [
     { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/student/mushaf', label: 'My Mushaf', icon: BookOpen, exact: true },
     { href: '/student/bookings', label: 'My bookings', icon: CalendarCheck },
     { href: '/student/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teachers', label: 'Find a teacher', icon: Search },
   ],
   teacher: [
     { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/teacher/mushaf', label: 'My Mushaf', icon: BookOpen, exact: true },
     { href: '/teacher/availability', label: 'Availability', icon: CalendarCheck },
     { href: '/teacher/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teacher/earnings', label: 'Earnings', icon: Wallet },
@@ -37,7 +41,6 @@ const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
 interface AppShellProps {
   role: StudioRole
   dashboardHref: string
-  profileHref?: string
   userName: string | null
   avatarUrl: string | null
   children: React.ReactNode
@@ -49,22 +52,48 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function SidebarLinks({ navItems, pathname, collapsed, onNavigate }: { navItems: StudioNavItem[]; pathname: string; collapsed: boolean; onNavigate?: () => void }) {
+interface SidebarLinksProps {
+  navItems: StudioNavItem[]
+  pathname: string
+  collapsed: boolean
+  /** The link that was just clicked and is still loading. */
+  pendingHref: string | null
+  onNavigate: (href: string) => void
+}
+
+function SidebarLinks({ navItems, pathname, collapsed, pendingHref, onNavigate }: SidebarLinksProps) {
   return (
     <nav className="flex flex-1 flex-col gap-1 p-3">
       {navItems.map((item) => {
-        const active = isActive(pathname, item.href)
+        const active = item.exact ? pathname === item.href : isActive(pathname, item.href)
+        const pending = pendingHref === item.href
         return (
           <Link
             key={item.href}
             href={item.href}
-            onClick={onNavigate}
+            // Load each sidebar page, data included, in the background as soon as the
+            // sidebar shows, so clicking one is instant. (Next skips this in `next dev`.)
+            prefetch
+            aria-busy={pending || undefined}
+            onClick={(event) => {
+              // Opening in a new tab, or clicking the page you're already on, doesn't load anything here.
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0 || pathname === item.href) return
+              onNavigate(item.href)
+            }}
             title={collapsed ? item.label : undefined}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-              active ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active:scale-[0.97] ${
+              pending
+                ? 'bg-brand-100 text-brand-800 ring-1 ring-brand-300'
+                : active && !pendingHref
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             } ${collapsed ? 'justify-center' : ''}`}
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            {pending ? (
+              <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin" aria-hidden="true" />
+            ) : (
+              <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            )}
             {collapsed ? null : <span className="truncate">{item.label}</span>}
           </Link>
         )
@@ -74,11 +103,17 @@ function SidebarLinks({ navItems, pathname, collapsed, onNavigate }: { navItems:
 }
 
 /** YouTube-Studio-style shell: collapsible left sidebar + slim top bar, used by the student/teacher/admin route groups. Page content renders unchanged inside the content area. */
-export function AppShell({ role, dashboardHref, profileHref, userName, avatarUrl, children }: AppShellProps) {
+export function AppShell({ role, dashboardHref, userName, avatarUrl, children }: AppShellProps) {
   const pathname = usePathname()
   const navItems = NAV_ITEMS_BY_ROLE[role]
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // The clicked link shows a spinner until the new page has arrived (the path changes).
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPendingHref(null)
+  }, [pathname])
 
   useEffect(() => {
     const stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY)
@@ -117,13 +152,13 @@ export function AppShell({ role, dashboardHref, profileHref, userName, avatarUrl
           <span className="hidden sm:inline">Preply Clone</span>
         </Link>
         <div className="ml-auto flex items-center gap-3">
-          <AccountMenu dashboardHref={dashboardHref} profileHref={profileHref} userName={userName} avatarUrl={avatarUrl} />
+          <AccountMenu dashboardHref={dashboardHref} userName={userName} avatarUrl={avatarUrl} showDashboardLink={false} />
         </div>
       </header>
 
       <div className="flex flex-1">
         <aside className={`sticky top-14 hidden h-[calc(100vh-3.5rem)] flex-shrink-0 flex-col border-r border-slate-200/80 bg-white transition-all duration-200 md:flex ${collapsed ? 'w-[76px]' : 'w-60'}`}>
-          <SidebarLinks navItems={navItems} pathname={pathname} collapsed={collapsed} />
+          <SidebarLinks navItems={navItems} pathname={pathname} collapsed={collapsed} pendingHref={pendingHref} onNavigate={setPendingHref} />
         </aside>
 
         {mobileOpen ? (
@@ -136,7 +171,16 @@ export function AppShell({ role, dashboardHref, profileHref, userName, avatarUrl
                   <X className="h-5 w-5" aria-hidden="true" />
                 </button>
               </div>
-              <SidebarLinks navItems={navItems} pathname={pathname} collapsed={false} onNavigate={() => setMobileOpen(false)} />
+              <SidebarLinks
+                navItems={navItems}
+                pathname={pathname}
+                collapsed={false}
+                pendingHref={pendingHref}
+                onNavigate={(href) => {
+                  setPendingHref(href)
+                  setMobileOpen(false)
+                }}
+              />
             </aside>
           </div>
         ) : null}

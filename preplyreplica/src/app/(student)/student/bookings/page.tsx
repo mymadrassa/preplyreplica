@@ -1,5 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(student)/bookings/page.tsx
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
+import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import Link from 'next/link'
 import { ArrowLeft, CalendarPlus, Video } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
@@ -48,6 +49,7 @@ async function submitReview(formData: FormData) {
 
   await supabase.from('reviews').insert({ booking_id: bookingId, student_id: userId, teacher_id: formData.get('teacherId') as string, rating, comment })
   revalidatePath('/student/bookings')
+  revalidateTag(TEACHER_CATALOGUE_TAG)
 }
 
 interface StudentBookingsPageProps {

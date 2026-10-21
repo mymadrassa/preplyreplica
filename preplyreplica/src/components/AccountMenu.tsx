@@ -11,9 +11,11 @@ interface AccountMenuProps {
   profileHref?: string
   userName?: string | null
   avatarUrl?: string | null
+  /** Hide the Dashboard entry where the page already has a sidebar link to it. */
+  showDashboardLink?: boolean
 }
 
-export function AccountMenu({ dashboardHref, profileHref, userName, avatarUrl }: AccountMenuProps) {
+export function AccountMenu({ dashboardHref, profileHref, userName, avatarUrl, showDashboardLink = true }: AccountMenuProps) {
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -54,10 +56,12 @@ export function AccountMenu({ dashboardHref, profileHref, userName, avatarUrl }:
       </button>
       {open ? (
         <div role="menu" className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-lift">
-          <Link href={dashboardHref} onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <LayoutDashboard className="h-4 w-4 text-slate-400" aria-hidden="true" />
-            Dashboard
-          </Link>
+          {showDashboardLink ? (
+            <Link href={dashboardHref} onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <LayoutDashboard className="h-4 w-4 text-slate-400" aria-hidden="true" />
+              Dashboard
+            </Link>
+          ) : null}
           {profileHref ? (
             <Link href={profileHref} onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
               <UserCircle className="h-4 w-4 text-slate-400" aria-hidden="true" />

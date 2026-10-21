@@ -16,7 +16,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   }
 
   return (
-    <AppShell role="teacher" dashboardHref="/teacher/dashboard" profileHref="/teacher/onboarding" userName={userName} avatarUrl={avatarUrl}>
+    <AppShell role="teacher" dashboardHref="/teacher/dashboard" userName={userName} avatarUrl={avatarUrl}>
       {children}
     </AppShell>
   )

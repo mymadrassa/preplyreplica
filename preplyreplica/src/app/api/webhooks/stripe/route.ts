@@ -2,6 +2,8 @@
 import type Stripe from 'stripe'
 import type { Database } from '@/types/database'
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
+import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { headers } from 'next/headers'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { constructStripeEvent } from '@/lib/stripe'
@@ -136,6 +138,7 @@ export async function POST(request: Request) {
         stripe_payouts_enabled: account.payouts_enabled,
       } as Database['public']['Tables']['teacher_profiles']['Update'])
       .eq('stripe_account_id', account.id)
+    revalidateTag(TEACHER_CATALOGUE_TAG)
   }
 
   return NextResponse.json({ received: true })
