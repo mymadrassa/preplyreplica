@@ -1,0 +1,8 @@
+{
+  "name": "preply-monorepo",
+  "private": true,
+  "workspaces": [
+    "preplyreplica",
+    "packages/*"
+  ]
+}

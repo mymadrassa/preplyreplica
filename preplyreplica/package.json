@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@jitsi/react-sdk": "^1.4.4",
+    "@preply-clone/mushaf": "*",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.48.0",
     "clsx": "^2.1.1",
