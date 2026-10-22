@@ -13,6 +13,7 @@ export function WizardShell({
   nextLabel = 'Next',
   nextDisabled = false,
   nextLoading = false,
+  nav,
 }: {
   step: string
   /** Defaults to the student wizard's step order; pass a different array to reuse this shell for another wizard (e.g. the teacher onboarding flow). */
@@ -25,6 +26,8 @@ export function WizardShell({
   nextLabel?: string
   nextDisabled?: boolean
   nextLoading?: boolean
+  /** Optional step navigation (e.g. clickable step tabs) shown under the progress bar. */
+  nav?: React.ReactNode
 }) {
   const currentIndex = steps.indexOf(step)
   const progressPercent = ((currentIndex + 1) / steps.length) * 100
@@ -37,6 +40,7 @@ export function WizardShell({
       <p className="mt-3 text-sm font-medium text-slate-500">
         Step {currentIndex + 1} of {steps.length}
       </p>
+      {nav ? <div className="mt-4">{nav}</div> : null}
 
       <h1 className="mt-4 text-3xl font-bold text-slate-900">{title}</h1>
       {subtitle ? <p className="mt-2 text-slate-600">{subtitle}</p> : null}

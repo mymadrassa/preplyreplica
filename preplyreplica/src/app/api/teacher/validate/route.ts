@@ -5,6 +5,7 @@ import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { sendTeacherApprovedEmail } from '@/lib/email'
+import { loadTeacherReadiness } from '@/lib/loadTeacherReadiness'
 
 const validationSchema = z.object({
   teacherId: z.string().uuid(),
@@ -39,14 +40,30 @@ export async function POST(request: Request) {
 
   const status = statusByAction[parseResult.data.action]
 
-  // Stripe payouts are the one thing that can't be fixed after the fact --
-  // an approved teacher with no connected account can't actually get paid
-  // once a student books. Approval is blocked until they've finished that
-  // setup; every other action (reject/suspend/reset) is unaffected.
+  // Approval needs a profile the teacher has actually submitted, with every
+  // mandatory step done -- the same rule the teacher's own "Submit" button
+  // uses (getTeacherReadiness). Every other action (reject/suspend/reset) is
+  // unaffected.
   if (status === 'approved') {
-    const { data: teacher } = await supabase.from('teacher_profiles').select('stripe_charges_enabled').eq('id', parseResult.data.teacherId).single()
-    if (!teacher?.stripe_charges_enabled) {
+    const loaded = await loadTeacherReadiness(supabase, parseResult.data.teacherId)
+    if (!loaded) {
+      return NextResponse.json({ error: 'This teacher has no profile yet.' }, { status: 409 })
+    }
+    if (loaded.status === 'draft') {
+      return NextResponse.json({ error: "This teacher hasn't submitted their profile for approval yet." }, { status: 409 })
+    }
+    const { readiness } = loaded
+    if (!readiness.payouts) {
       return NextResponse.json({ error: "This teacher hasn't finished setting up Stripe payouts yet, so they can't be approved." }, { status: 409 })
+    }
+    if (!readiness.identity) {
+      return NextResponse.json({ error: "This teacher hasn't uploaded an ID document yet." }, { status: 409 })
+    }
+    if (!readiness.photo) {
+      return NextResponse.json({ error: "This teacher hasn't added a profile photo yet." }, { status: 409 })
+    }
+    if (!readiness.profile) {
+      return NextResponse.json({ error: "This teacher's profile is incomplete." }, { status: 409 })
     }
   }
 

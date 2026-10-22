@@ -1,5 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/components/StatusBadge.tsx
 const colorMap: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200',
   approved: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200',
   confirmed: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200',
   completed: 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200',
@@ -17,6 +18,7 @@ const colorMap: Record<string, string> = {
 }
 
 const dotColorMap: Record<string, string> = {
+  draft: 'bg-slate-400',
   approved: 'bg-emerald-500',
   confirmed: 'bg-emerald-500',
   completed: 'bg-brand-500',
@@ -31,6 +33,11 @@ const dotColorMap: Record<string, string> = {
   failed: 'bg-red-500',
 }
 
+// Statuses whose raw value isn't a good label on its own.
+const DEFAULT_LABELS: Record<string, string> = {
+  draft: 'not submitted',
+}
+
 // `label`, when given, overrides only the displayed text — color still comes
 // from `status`, so a caller can show booking-specific wording (e.g.
 // "Awaiting approval" instead of the raw "pending") without this component
@@ -39,7 +46,7 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${colorMap[status] ?? 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200'}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${dotColorMap[status] ?? 'bg-slate-400'}`} aria-hidden="true" />
-      {label ?? status}
+      {label ?? DEFAULT_LABELS[status] ?? status}
     </span>
   )
 }

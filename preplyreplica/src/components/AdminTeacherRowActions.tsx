@@ -17,9 +17,10 @@ interface AdminTeacherRowActionsProps {
   hourlyRate: number
   stripeChargesEnabled: boolean
   videoUrl: string | null
-  documentUrls: { name: string; url: string }[]
+  documentUrls: { name: string; url: string; kind?: 'identity' | 'certificate'; reviewChange?: 'add' | 'remove' | null }[]
   status: string
   createdAt: string | null
+  pendingChanges?: { field: string; label: string; before: unknown; after: unknown }[] | null
 }
 
 /** Quick compact approve/reject (only while pending) plus a "View profile" button that opens the full detail modal — mirrors BookingActions' compact pattern for table cells. */

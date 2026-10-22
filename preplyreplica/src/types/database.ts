@@ -54,7 +54,7 @@ export type Database = {
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
           stripe_payouts_enabled: boolean
-          status: 'pending' | 'approved' | 'rejected' | 'suspended'
+          status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg: number
           rating_count: number
           approval_seen_at: string | null
@@ -72,7 +72,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_payouts_enabled?: boolean
-          status?: 'pending' | 'approved' | 'rejected' | 'suspended'
+          status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg?: number
           rating_count?: number
           approval_seen_at?: string | null
@@ -89,7 +89,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_payouts_enabled?: boolean
-          status?: 'pending' | 'approved' | 'rejected' | 'suspended'
+          status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg?: number
           rating_count?: number
           approval_seen_at?: string | null
@@ -105,22 +105,77 @@ export type Database = {
           }
         ]
       }
+      teacher_profile_changes: {
+        Row: {
+          teacher_id: string
+          headline: string | null
+          bio: string | null
+          subjects: string[]
+          languages: string[]
+          video_url: string | null
+          avatar_url: string | null
+          state: 'draft' | 'submitted'
+          review_note: string | null
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          teacher_id: string
+          headline?: string | null
+          bio?: string | null
+          subjects?: string[]
+          languages?: string[]
+          video_url?: string | null
+          avatar_url?: string | null
+          state?: 'draft' | 'submitted'
+          review_note?: string | null
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          headline?: string | null
+          bio?: string | null
+          subjects?: string[]
+          languages?: string[]
+          video_url?: string | null
+          avatar_url?: string | null
+          state?: 'draft' | 'submitted'
+          review_note?: string | null
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'teacher_profile_changes_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: true
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       teacher_documents: {
         Row: {
           id: string
           teacher_id: string
           bucket_path: string
+          kind: 'identity' | 'certificate'
+          review_change: 'add' | 'remove' | null
           uploaded_at: string
         }
         Insert: {
           id?: string
           teacher_id: string
           bucket_path: string
+          kind?: 'identity' | 'certificate'
+          review_change?: 'add' | 'remove' | null
           uploaded_at?: string
         }
         Update: {
           teacher_id?: string
           bucket_path?: string
+          kind?: 'identity' | 'certificate'
+          review_change?: 'add' | 'remove' | null
           uploaded_at?: string
         }
         Relationships: [

@@ -6,6 +6,7 @@ import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RatingStars } from '@/components/RatingStars'
 import { ChatButton } from '@/components/chat/ChatButton'
+import { Avatar } from '@/components/Avatar'
 
 // A directly uploaded file (public Supabase Storage URL, e.g. .../video.mp4)
 // plays via the native <video> element; anything else is assumed to be an
@@ -21,6 +22,8 @@ interface TeacherPageProps {
   }
   searchParams: {
     intent?: string
+    /** `1` lets a teacher preview their own page as students see it, before approval or with pending changes. */
+    preview?: string
   }
 }
 
@@ -30,11 +33,12 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
   const viewerId = session.data?.session?.user?.id
   const isOwnProfile = viewerId === params.id
   const isOtherViewer = !!viewerId && !isOwnProfile
+  const isPreview = isOwnProfile && searchParams.preview === '1'
 
   // The teacher, the viewer's role and any existing booking between them don't
   // depend on each other, so they're fetched together in one round trip. The
   // booking lookup is only used below if the viewer turns out to be able to book.
-  const [{ data: teacher, error }, viewerProfileResult, existingBookingResult] = await Promise.all([
+  const [{ data: teacher, error }, viewerProfileResult, existingBookingResult, changesResult] = await Promise.all([
     supabase
       .from('teacher_profiles')
       .select('*, profiles(*), reviews(*, profiles!student_id(full_name))')
@@ -52,10 +56,23 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
           .limit(1)
           .maybeSingle()
       : null,
+    // In preview, show the teacher's edits awaiting review as they'll appear once approved.
+    isPreview ? supabase.from('teacher_profile_changes').select('*').eq('teacher_id', params.id).maybeSingle() : null,
   ])
 
-  if (error || !teacher || teacher.status !== 'approved') {
+  // Students only ever see approved profiles; a teacher previewing their own page sees it whatever its status.
+  if (error || !teacher || (teacher.status !== 'approved' && !isPreview)) {
     return notFound()
+  }
+
+  const changes = changesResult?.data ?? null
+  const shown = {
+    headline: changes?.headline ?? teacher.headline,
+    bio: changes?.bio ?? teacher.bio,
+    subjects: changes?.subjects ?? teacher.subjects,
+    languages: changes?.languages ?? teacher.languages,
+    video_url: changes ? changes.video_url : teacher.video_url,
+    avatar_url: changes ? changes.avatar_url : teacher.profiles?.avatar_url ?? null,
   }
 
   const viewerRole = (viewerProfileResult?.data as { role?: string } | null | undefined)?.role
@@ -72,13 +89,20 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
 
   return (
     <main className="container mx-auto px-4 py-12">
+      {isPreview ? (
+        <div className="mb-6 rounded-2xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <strong>Preview:</strong> this is how students see your profile
+          {teacher.status !== 'approved' ? '. It isn’t visible to students yet.' : changes ? ', including your changes awaiting review.' : '.'}
+        </div>
+      ) : null}
       <div className="grid gap-10 lg:grid-cols-[1.7fr_1fr]">
         <section className="space-y-6">
           <div className="flex flex-wrap items-center gap-4">
+            <Avatar name={teacher.profiles?.full_name} avatarUrl={shown.avatar_url} size="md" className="h-16 w-16 text-xl" />
             <h1 className="text-3xl font-semibold text-slate-900">{teacher.profiles?.full_name ?? 'Teacher profile'}</h1>
-            <StatusBadge status={teacher.status} />
+            {!isPreview ? <StatusBadge status={teacher.status} /> : null}
           </div>
-          <p className="text-slate-600">{teacher.headline}</p>
+          <p className="text-slate-600">{shown.headline}</p>
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <RatingStars value={Number(teacher.rating_avg ?? 0)} />
             <span className="font-semibold text-slate-900">{Number(teacher.rating_avg ?? 0).toFixed(1)}</span>
@@ -89,27 +113,27 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
           <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-slate-500">About</p>
-              <p className="mt-2 text-slate-700">{teacher.bio}</p>
+              <p className="mt-2 whitespace-pre-line text-slate-700">{shown.bio}</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Subjects</p>
-                <p className="mt-2 text-slate-700">{teacher.subjects?.join(', ') || 'Not specified'}</p>
+                <p className="mt-2 text-slate-700">{shown.subjects?.join(', ') || 'Not specified'}</p>
               </div>
               <div>
                 <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Languages</p>
-                <p className="mt-2 text-slate-700">{teacher.languages?.join(', ') || 'Not specified'}</p>
+                <p className="mt-2 text-slate-700">{shown.languages?.join(', ') || 'Not specified'}</p>
               </div>
             </div>
           </div>
-          {teacher.video_url ? (
+          {shown.video_url ? (
             <div className="rounded-3xl overflow-hidden border border-slate-200 bg-slate-950">
-              {isDirectVideoFile(teacher.video_url) ? (
-                <video controls className="h-72 w-full" src={teacher.video_url} />
+              {isDirectVideoFile(shown.video_url) ? (
+                <video controls className="h-72 w-full" src={shown.video_url} />
               ) : (
                 <iframe
                   className="h-72 w-full"
-                  src={teacher.video_url}
+                  src={shown.video_url}
                   title="Teacher introduction"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -165,7 +189,7 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
             />
           ) : isOwnProfile ? (
             <Card>
-              <p className="text-slate-600">This is how students see your profile. Manage your details from your teacher dashboard.</p>
+              <p className="text-slate-600">Students book you from this panel. Manage your details from your Profile page.</p>
             </Card>
           ) : viewerRole !== 'teacher' && viewerRole !== 'admin' && !teacher.stripe_charges_enabled ? (
             <Card>

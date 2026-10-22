@@ -1,4 +1,6 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(admin)/dashboard/page.tsx
+import { diffProfileChanges } from '@/lib/profileEditing'
+import { reviewedValuesOf } from '@/lib/teacherProfileState'
 import Link from 'next/link'
 import { CalendarCheck, GraduationCap, Search, TrendingUp, UserCog, Users as UsersIcon, Wallet, Banknote } from 'lucide-react'
 import type { Database } from '@/types/database'
@@ -21,9 +23,37 @@ type TeacherProfileWithRelations = Database['public']['Tables']['teacher_profile
   profiles: Database['public']['Tables']['profiles']['Row'] | null
   teacher_documents: TeacherDocument[]
   bookings: { payments: PaymentRow[] }[]
+  teacher_profile_changes: Database['public']['Tables']['teacher_profile_changes']['Row'] | Database['public']['Tables']['teacher_profile_changes']['Row'][] | null
 }
 
-const TEACHER_STATUSES = ['approved', 'pending', 'rejected', 'suspended'] as const
+/** A live teacher's edits that are submitted and waiting for the admin, as before/after pairs. */
+function submittedChanges(teacher: TeacherProfileWithRelations) {
+  const raw = teacher.teacher_profile_changes
+  const changes = Array.isArray(raw) ? raw[0] : raw
+  if (!changes || changes.state !== 'submitted') return null
+  const fields: { field: string; label: string; before: unknown; after: unknown }[] = diffProfileChanges(
+    reviewedValuesOf(teacher, teacher.profiles?.avatar_url ?? null),
+    {
+      headline: changes.headline,
+      bio: changes.bio,
+      subjects: changes.subjects,
+      languages: changes.languages,
+      video_url: changes.video_url,
+      avatar_url: changes.avatar_url,
+    }
+  )
+  // ID documents changed after approval are reviewed with the rest.
+  const docs = teacher.teacher_documents ?? []
+  const fileName = (path: string) => path.split('/').pop()?.replace(/^\d+-/, '') ?? path
+  const removed = docs.filter((d) => d.review_change === 'remove').map((d) => fileName(d.bucket_path))
+  const added = docs.filter((d) => d.review_change === 'add').map((d) => fileName(d.bucket_path))
+  if (removed.length || added.length) {
+    fields.push({ field: 'identity', label: 'ID document (open it in the documents list below)', before: removed, after: added })
+  }
+  return fields
+}
+
+const TEACHER_STATUSES = ['draft', 'approved', 'pending', 'rejected', 'suspended'] as const
 const PAGE_SIZE = 20
 
 interface AdminDashboardPageProps {
@@ -56,8 +86,9 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
   let teachersQuery = supabase
     .from('teacher_profiles')
-    .select('*, profiles(*), teacher_documents(*), bookings(payments(*))')
-  if (status) teachersQuery = teachersQuery.eq('status', status as 'pending' | 'approved' | 'rejected' | 'suspended')
+    .select('*, profiles(*), teacher_documents(*), bookings(payments(*)), teacher_profile_changes(*)')
+  // 'changes' isn't a status: it means live teachers whose edits are waiting for review (filtered below).
+  if (status && status !== 'changes') teachersQuery = teachersQuery.eq('status', status as 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended')
   if (from) teachersQuery = teachersQuery.gte('created_at', from)
   if (to) teachersQuery = teachersQuery.lte('created_at', `${to}T23:59:59`)
 
@@ -93,7 +124,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       .order('teacher_confirmed_at', { ascending: true }),
   ])
 
-  const allTeachers = ((teachersRaw as TeacherProfileWithRelations[] | null) ?? [])
+  const allTeachers = ((teachersRaw as TeacherProfileWithRelations[] | null) ?? []).filter((teacher) => status !== 'changes' || submittedChanges(teacher))
 
   const normalizedQuery = q.trim().toLowerCase()
   const filteredTeachers = normalizedQuery
@@ -138,7 +169,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       const documentUrls = await Promise.all(
         (teacher.teacher_documents ?? []).map(async (doc) => {
           const { data } = await supabase.storage.from(bucket).createSignedUrl(doc.bucket_path, 3600)
-          return { name: doc.bucket_path.split('/').pop() || doc.bucket_path, url: data?.signedUrl || '' }
+          return { name: doc.bucket_path.split('/').pop() || doc.bucket_path, url: data?.signedUrl || '', kind: doc.kind ?? 'identity', reviewChange: doc.review_change ?? null }
         })
       )
       const payments = (teacher.bookings ?? []).flatMap((booking) => booking.payments ?? [])
@@ -162,6 +193,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         createdAt: teacher.created_at,
         awaitingPayoutPence,
         paidOutPence,
+        pendingChanges: submittedChanges(teacher),
       }
     })
   )
@@ -336,6 +368,8 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
             defaultValue={status}
             options={[
               { value: '', label: 'All statuses' },
+              { value: 'changes', label: 'Changes to review' },
+              { value: 'draft', label: 'Not submitted' },
               { value: 'pending', label: 'Pending' },
               { value: 'approved', label: 'Approved' },
               { value: 'rejected', label: 'Rejected' },

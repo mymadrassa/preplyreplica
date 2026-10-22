@@ -6,6 +6,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ApprovalTimeline, buildTeacherApprovalSteps } from '@/components/ApprovalTimeline'
+import { getTeacherReadiness } from '@/lib/teacherReadiness'
 import { StripeOnboardingSuccessBanner } from '@/components/StripeOnboardingSuccessBanner'
 import { BookingActions } from '@/components/BookingActions'
 import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
@@ -24,9 +25,10 @@ export default async function TeacherDashboardPage({
     redirect('/auth/login')
   }
 
-  const [{ data: teacher }, { data: bookings }] = await Promise.all([
+  const [{ data: teacher }, { data: bookings }, { count: identityDocumentCount }] = await Promise.all([
     supabase.from('teacher_profiles').select('*, profiles(*)').eq('id', userId).single(),
     supabase.from('bookings').select('*, profiles!student_id(*)').eq('teacher_id', userId).order('start_at', { ascending: true }).limit(10),
+    supabase.from('teacher_documents').select('id', { count: 'exact', head: true }).eq('teacher_id', userId).eq('kind', 'identity').or('review_change.is.null,review_change.eq.remove'),
   ])
 
   if (!teacher) {
@@ -39,6 +41,17 @@ export default async function TeacherDashboardPage({
   // then disappears on every visit after that.
   const justApproved = teacher.status === 'approved' && !teacher.approval_seen_at
   const showTimeline = teacher.status !== 'approved' || justApproved
+
+  const readiness = getTeacherReadiness({
+    headline: teacher.headline,
+    bio: teacher.bio,
+    subjects: teacher.subjects,
+    languages: teacher.languages,
+    hourly_rate: teacher.hourly_rate,
+    avatar_url: teacher.profiles?.avatar_url ?? null,
+    identityDocumentCount: identityDocumentCount ?? 0,
+    stripe_charges_enabled: teacher.stripe_charges_enabled,
+  })
 
   if (justApproved) {
     await supabase.from('teacher_profiles').update({ approval_seen_at: new Date().toISOString() }).eq('id', userId)
@@ -58,7 +71,7 @@ export default async function TeacherDashboardPage({
               <strong>Finish your Stripe payout setup</strong> to start accepting bookings — your profile can't be approved or receive payments until this is complete.
             </p>
           </div>
-          <Link href="/teacher/onboarding" className="whitespace-nowrap rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">
+          <Link href="/teacher/profile/payouts" className="whitespace-nowrap rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">
             Complete Stripe setup
           </Link>
         </div>
@@ -77,7 +90,7 @@ export default async function TeacherDashboardPage({
         <Card className="mb-8">
           <p className="mb-6 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Approval progress</p>
           <ApprovalTimeline
-            steps={buildTeacherApprovalSteps({ status: teacher.status ?? 'pending', stripe_charges_enabled: !!teacher.stripe_charges_enabled })}
+            steps={buildTeacherApprovalSteps({ status: teacher.status, readiness })}
           />
         </Card>
       ) : null}
@@ -86,7 +99,7 @@ export default async function TeacherDashboardPage({
           <ClipboardCheck className="h-5 w-5 text-brand-600" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Profile status</p>
           <div className="mt-2 flex items-center gap-3">
-            <p className="text-3xl font-semibold capitalize text-slate-900">{teacher?.status || 'pending'}</p>
+            <p className="text-3xl font-semibold capitalize text-slate-900">{teacher.status === 'draft' ? 'Not submitted' : teacher.status}</p>
             <StatusBadge status={teacher?.status ?? 'pending'} />
           </div>
           <p className="mt-4 text-slate-600">Your profile is visible to students only after approval.</p>

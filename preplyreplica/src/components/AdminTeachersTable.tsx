@@ -17,11 +17,13 @@ export interface AdminTeacherRow {
   hourlyRate: number
   stripeChargesEnabled: boolean
   videoUrl: string | null
-  documentUrls: { name: string; url: string }[]
+  documentUrls: { name: string; url: string; kind?: 'identity' | 'certificate'; reviewChange?: 'add' | 'remove' | null }[]
   status: string
   createdAt: string | null
   awaitingPayoutPence: number
   paidOutPence: number
+  /** Submitted edits to a live profile, waiting for the admin; null when there are none. */
+  pendingChanges: { field: string; label: string; before: unknown; after: unknown }[] | null
 }
 
 type SortBy = 'name' | 'created_at' | 'status'
@@ -99,7 +101,12 @@ export function AdminTeachersTable({ rows, page, pageSize, totalCount, sortBy, s
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
-                  <StatusBadge status={row.status} />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={row.status} />
+                    {row.pendingChanges?.length ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">Changes to review</span>
+                    ) : null}
+                  </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-700">{row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-GB') : '—'}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-700">
@@ -128,6 +135,7 @@ export function AdminTeachersTable({ rows, page, pageSize, totalCount, sortBy, s
                     documentUrls={row.documentUrls}
                     status={row.status}
                     createdAt={row.createdAt}
+                    pendingChanges={row.pendingChanges}
                   />
                 </td>
               </tr>

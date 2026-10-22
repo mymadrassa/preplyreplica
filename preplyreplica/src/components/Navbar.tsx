@@ -10,7 +10,7 @@ const dashboardByRole: Record<string, string> = {
 }
 
 const profileByRole: Record<string, string> = {
-  teacher: '/teacher/onboarding',
+  teacher: '/teacher/profile',
 }
 
 export async function Navbar() {

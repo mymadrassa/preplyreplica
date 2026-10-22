@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronsLeft, ChevronsRight, Loader2, Menu, X, LayoutDashboard, BookOpen, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, type LucideIcon } from 'lucide-react'
 import { AccountMenu } from '@/components/AccountMenu'
+import { NotificationBell, type AppNotification } from '@/components/NotificationBell'
 
 interface StudioNavItem {
   href: string
@@ -33,7 +34,7 @@ const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
     { href: '/teacher/availability', label: 'Availability', icon: CalendarCheck },
     { href: '/teacher/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teacher/earnings', label: 'Earnings', icon: Wallet },
-    { href: '/teacher/onboarding', label: 'Profile', icon: UserCircle },
+    { href: '/teacher/profile', label: 'Profile', icon: UserCircle },
   ],
   admin: [{ href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
 }
@@ -43,6 +44,8 @@ interface AppShellProps {
   dashboardHref: string
   userName: string | null
   avatarUrl: string | null
+  /** When given, a bell in the top bar lists these (e.g. what a teacher still has to finish). */
+  notifications?: AppNotification[]
   children: React.ReactNode
 }
 
@@ -103,7 +106,7 @@ function SidebarLinks({ navItems, pathname, collapsed, pendingHref, onNavigate }
 }
 
 /** YouTube-Studio-style shell: collapsible left sidebar + slim top bar, used by the student/teacher/admin route groups. Page content renders unchanged inside the content area. */
-export function AppShell({ role, dashboardHref, userName, avatarUrl, children }: AppShellProps) {
+export function AppShell({ role, dashboardHref, userName, avatarUrl, notifications, children }: AppShellProps) {
   const pathname = usePathname()
   const navItems = NAV_ITEMS_BY_ROLE[role]
   const [collapsed, setCollapsed] = useState(false)
@@ -152,6 +155,7 @@ export function AppShell({ role, dashboardHref, userName, avatarUrl, children }:
           <span className="hidden sm:inline">Preply Clone</span>
         </Link>
         <div className="ml-auto flex items-center gap-3">
+          {notifications ? <NotificationBell notifications={notifications} /> : null}
           <AccountMenu dashboardHref={dashboardHref} userName={userName} avatarUrl={avatarUrl} showDashboardLink={false} />
         </div>
       </header>

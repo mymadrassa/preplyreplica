@@ -29,7 +29,6 @@ export function StepMedia() {
   const [videoMode, setVideoMode] = useState<VideoMode>('url')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoFilePreviewUrl, setVideoFilePreviewUrl] = useState<string | null>(null)
-  const [documents, setDocuments] = useState<FileList | null>(null)
   // Only for the video-duration check below -- an inline hint tied to that
   // one field, not a submission-level notification, so it stays as a local
   // message rather than a toast.
@@ -66,21 +65,6 @@ export function StepMedia() {
     return data.publicUrl
   }
 
-  async function uploadDocuments(files: FileList) {
-    const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_TEACHER_DOCS || 'teacher-documents'
-    const folder = `teacher-documents/${Date.now()}`
-    const paths: string[] = []
-
-    for (const file of Array.from(files)) {
-      const path = `${folder}/${file.name}`
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { upsert: true })
-      if (uploadError) throw new Error(uploadError.message)
-      paths.push(path)
-    }
-
-    return paths
-  }
-
   async function handleFinish() {
     // nextDisabled already keeps WizardShell from calling this while
     // invalid, but guard here too in case that ever changes.
@@ -90,7 +74,6 @@ export function StepMedia() {
 
     try {
       const videoUrl = videoMode === 'upload' && videoFile ? await uploadVideo(videoFile) : normalizedVideo?.embedUrl ?? ''
-      const documentPaths = documents ? await uploadDocuments(documents) : []
 
       const response = await fetch('/api/teacher/onboard', {
         method: 'POST',
@@ -102,7 +85,6 @@ export function StepMedia() {
           subjects: state.subjects,
           hourly_rate: Number(state.hourlyRate),
           video_url: videoUrl,
-          document_paths: documentPaths,
           start_stripe_onboarding: true,
         }),
       })
@@ -136,8 +118,8 @@ export function StepMedia() {
     <WizardShell
       step="media"
       steps={TEACHER_WIZARD_STEPS}
-      title="Add an intro video and documents"
-      subtitle="Both are optional, but a video and verified documents help you get approved faster."
+      title="Add an intro video"
+      subtitle="Optional, but a short video helps students choose you."
       onBack={() => router.push('/teacher/onboarding/rate')}
       onNext={handleFinish}
       nextLabel="Finish"
@@ -235,20 +217,10 @@ export function StepMedia() {
           </p>
         </div>
 
-        <div>
-          <span className="block text-sm font-medium text-slate-700">Verification documents (optional)</span>
-          <p className="mt-1 text-xs text-slate-500">
-            A government-issued ID and any teaching certificates or diplomas you have. Used only to verify your identity and
-            qualifications before approval — never shown publicly. PDF or image files.
-          </p>
-          <input
-            type="file"
-            accept="application/pdf,image/*"
-            multiple
-            onChange={(event) => setDocuments(event.target.files)}
-            className="mt-2 w-full text-sm text-slate-700"
-          />
-        </div>
+        <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Next, you&apos;ll add a profile photo and an ID document in a short guided step. Both are required before you can submit
+          your profile for approval, and your dashboard shows what&apos;s left.
+        </p>
       </div>
     </WizardShell>
   )
