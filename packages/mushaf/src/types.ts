@@ -5,6 +5,8 @@ export interface MushafWord {
   ayah: number
   wordIndex: number
   text: string
+  /** The same word in IndoPak spelling, when available. */
+  indopak?: string
   /** A verse-end number ornament. It is selectable and markable like a word. */
   isMarker?: boolean
   /** Glyph(s) in the page's QCF font; absent when only plain text is available. */
@@ -22,10 +24,20 @@ export interface MushafLine {
   surahName?: string
 }
 
+export interface SurahInfo {
+  number: number
+  /** Arabic name, e.g. "البقرة". */
+  arabic: string
+  /** Transliterated name, e.g. "Al-Baqarah". */
+  english: string
+}
+
 export interface MushafPageData {
   page: number
   lines: MushafLine[]
-  /** True when the QCF glyph fonts loaded, so words render as glyphs; otherwise plain text. */
+  /** The surahs that appear on this page, in reading order (absent when names are unavailable). */
+  surahs?: SurahInfo[]
+  /** True when the chosen script's font(s) loaded; otherwise words render as plain text. */
   fontsReady?: boolean
 }
 

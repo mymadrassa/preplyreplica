@@ -1,4 +1,4 @@
-import type { MushafLine, MushafPageData, MushafWord } from '../types'
+import type { MushafLine, MushafPageData, MushafWord, SurahInfo } from '../types'
 
 // Quran.com public API v4 (CORS-open). `mushaf=2` is the 15-line Madinah
 // layout, so `line_number` per word reproduces the printed page.
@@ -8,6 +8,7 @@ interface ApiWord {
   position: number
   char_type_name: 'word' | 'end' | string
   text_uthmani?: string
+  text_indopak?: string
   text?: string
   code_v1?: string
   page_number?: number
@@ -48,6 +49,8 @@ export function pageFromQuranCom(page: number, verses: ApiVerse[], chapters?: Ch
         ayah,
         wordIndex: word.position,
         text: word.text_uthmani ?? word.text ?? '',
+        // The API ends some IndoPak words with a right-to-left mark; it isn't part of the word.
+        ...(word.text_indopak ? { indopak: word.text_indopak.replace(/\u200f/g, '') } : {}),
         ...(isMarker ? { isMarker: true } : {}),
         ...(word.code_v1 ? { glyph: word.code_v1 } : {}),
         ...(word.page_number ? { fontPage: word.page_number } : {}),
@@ -73,7 +76,15 @@ export function pageFromQuranCom(page: number, verses: ApiVerse[], chapters?: Ch
   }
 
   lines.sort((a, b) => a.lineNumber - b.lineNumber)
-  return { page, lines }
+
+  const surahNumbers = [...new Set(verses.map((verse) => Number(verse.verse_key.split(':')[0])))]
+  const surahs: SurahInfo[] | undefined = chapters
+    ? surahNumbers.flatMap((number) =>
+        chapters[number] ? [{ number, arabic: chapters[number].name, english: chapters[number].simpleName ?? `Surah ${number}` }] : []
+      )
+    : undefined
+
+  return surahs ? { page, lines, surahs } : { page, lines }
 }
 
 let chaptersPromise: Promise<Chapters | undefined> | null = null
@@ -99,7 +110,7 @@ export function fetchChapters(): Promise<Chapters | undefined> {
 }
 
 export async function fetchQuranComPage(page: number, signal?: AbortSignal): Promise<MushafPageData> {
-  const url = `${API}/verses/by_page/${page}?words=true&word_fields=code_v1,text_uthmani,line_number,page_number&per_page=50&mushaf=2`
+  const url = `${API}/verses/by_page/${page}?words=true&word_fields=code_v1,text_uthmani,text_indopak,line_number,page_number&per_page=50&mushaf=2`
   const [response, chapters] = await Promise.all([fetch(url, { signal }), fetchChapters()])
   if (!response.ok) throw new Error(`Quran.com responded ${response.status}`)
   const data = (await response.json()) as { verses: ApiVerse[] }

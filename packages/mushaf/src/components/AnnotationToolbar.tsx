@@ -28,6 +28,8 @@ interface AnnotationToolbarProps {
   markKinds: readonly AnnotationKind[]
   /** The selected words, in reading order. */
   words: MushafWord[]
+  /** Where the selection sits, e.g. "Al-Baqarah · Ayat 5–7". */
+  title: string
   /** Marks covering the selected words, so the current choice shows as selected. */
   existing: MushafAnnotation[]
   currentUserId: string
@@ -36,14 +38,16 @@ interface AnnotationToolbarProps {
   onError: (message: string) => void
   /** Called once a mark has been applied, or the toolbar is dismissed. */
   onClose: () => void
+  /** Your existing comment on exactly this selection: the comment field opens with it and saving replaces it. */
+  editableNote?: { id: string; text: string } | null
 }
 
 // Floating toolbar next to the selection: one icon per kind of mark, each
 // opening its own options. Marks apply to every selected word. Students only
 // get the comment icon.
-export function AnnotationToolbar({ markKinds, words, existing, currentUserId, onAdd, onRemove, onError, onClose }: AnnotationToolbarProps) {
+export function AnnotationToolbar({ markKinds, words, title, existing, currentUserId, onAdd, onRemove, onError, onClose, editableNote = null }: AnnotationToolbarProps) {
   const [panel, setPanel] = useState<Panel | null>(null)
-  const [note, setNote] = useState('')
+  const [note, setNote] = useState(editableNote?.text ?? '')
   const panels = (['highlight', 'error', 'note'] as const).filter((kind) => markKinds.includes(kind))
 
   const first = words[0]
@@ -82,6 +86,12 @@ export function AnnotationToolbar({ markKinds, words, existing, currentUserId, o
   async function submitNote() {
     const text = note.trim()
     if (!text) return
+    if (editableNote && text === editableNote.text.trim()) return onClose()
+    // Editing your comment: the new text takes the old one's place.
+    if (editableNote) {
+      const { error } = await onRemove([editableNote.id])
+      if (error) return onError(error)
+    }
     const { error } = await onAdd([
       {
         kind: 'note',
@@ -97,7 +107,6 @@ export function AnnotationToolbar({ markKinds, words, existing, currentUserId, o
     else onClose()
   }
 
-  const title = words.length === 1 ? `Word ${first.id}` : `${words.length} words`
 
   return (
     <div

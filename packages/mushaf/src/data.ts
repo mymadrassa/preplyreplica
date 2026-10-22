@@ -1,5 +1,7 @@
+import type { MushafScript } from './script'
 import type { MushafPageData } from './types'
 import { FIXTURE_PAGES } from './data/fixturePages'
+import { ensureIndopakFont } from './data/indopakFont'
 import { ensureQcfFonts } from './data/qcfFonts'
 import { fetchQuranComPage } from './data/quranCom'
 
@@ -33,13 +35,17 @@ export async function loadMushafPage(pageNumber: number, signal?: AbortSignal): 
   if (cached) return cached
 
   try {
-    const fetched = await fetchQuranComPage(page, signal)
-    const fontPages = fetched.lines.flatMap((line) => line.words.map((w) => w.fontPage ?? page))
-    const fontsReady = await ensureQcfFonts(fontPages)
-    const loaded = { ...fetched, fontsReady }
+    const loaded = await fetchQuranComPage(page, signal)
     cache.set(page, loaded)
     return loaded
   } catch {
     return getFixturePage(page)
   }
+}
+
+/** Loads the font(s) a script needs for this page; false means the page should fall back to plain text. */
+export function loadScriptFonts(page: MushafPageData, script: MushafScript): Promise<boolean> {
+  if (script === 'indopak') return ensureIndopakFont()
+  const fontPages = page.lines.flatMap((line) => line.words.flatMap((w) => (w.glyph ? [w.fontPage ?? page.page] : [])))
+  return fontPages.length ? ensureQcfFonts(fontPages) : Promise.resolve(false)
 }

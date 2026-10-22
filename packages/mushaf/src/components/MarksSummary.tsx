@@ -96,7 +96,7 @@ export function MarksSummary({ pageNumber, blocks, verseNotes, selectedWordIds, 
   }
 
   return (
-    <aside data-mushaf-keep aria-label="Revision history" className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+    <aside data-mushaf-keep aria-label="Revision history" className="flex max-h-[calc(100vh-7rem)] flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-900">Revision history</p>
         <div className="flex items-center gap-1">
@@ -159,7 +159,7 @@ export function MarksSummary({ pageNumber, blocks, verseNotes, selectedWordIds, 
         </div>
       ) : null}
 
-      <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
+      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
         {blocks.map((block) => {
           const isSelected = block.words.some((w) => selectedWordIds.has(w.id))
           const marks = block.items.filter((i) => i.kind !== 'note')

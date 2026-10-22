@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { canDeleteAnnotation } from '../annotations'
 import { clampPage, getFixturePage, getTotalPages, verseRefFromWordRef } from '../data'
 import { pageFromQuranCom } from '../data/quranCom'
-import { annotationCoversWord, buildMarkBlocks, commonValue, flattenWords, wordsBetween } from '../selection'
+import { annotationCoversWord, buildMarkBlocks, commonValue, describeSelection, findEditableNote, flattenWords, highlightRuns, noteIconWordIds, notesOnPage, selectionBands, wordsBetween } from '../selection'
+import { renderModeFor, wordDisplay } from '../script'
 import { eraseFromStroke, simplifyPoints } from '../strokes'
 import { authorLabel, capabilitiesFor } from '../permissions'
 import { filterSurahs, surahListFromChapters } from '../surahSearch'
@@ -226,5 +227,155 @@ describe('role capabilities', () => {
     expect(authorLabel('owner', 'me', null)).toBe('You')
     expect(authorLabel('teacher', 't1', 't1')).toBe('Teacher')
     expect(authorLabel('student', 's1', 't1')).toBe('Student')
+  })
+})
+
+describe('comment icons, editable notes and selection bands', () => {
+  const base = { sessionId: 's', bookingId: null, color: null, errorType: null, verseRef: '1:1', createdAt: '' }
+  const note = (id: string, authorId: string, wordRef: string | null, endWordRef: string | null): MushafAnnotation => ({
+    ...base,
+    id,
+    authorId,
+    kind: 'note',
+    wordRef,
+    endWordRef,
+    noteText: 'x',
+  })
+
+  it('puts one icon on the last word of a range comment, and on the word of a single-word comment', () => {
+    const ids = noteIconWordIds([note('a', 'u', '1:1:1', '1:1:4'), note('b', 'u', '1:2:1', null), note('c', 'u', null, null)])
+    expect([...ids].sort()).toEqual(['1:1:4', '1:2:1'])
+  })
+
+  it('finds only your own comment whose range matches the selection exactly', () => {
+    const list = [note('mine', 'me', '1:1:1', '1:1:4'), note('theirs', 'them', '1:1:1', '1:1:4'), note('wider', 'me', '1:1:1', '1:1:5')]
+    expect(findEditableNote(list, 'me', '1:1:1', '1:1:4')?.id).toBe('mine')
+    expect(findEditableNote(list, 'me', '1:1:2', '1:1:4')).toBeNull()
+    expect(findEditableNote([note('single', 'me', '1:2:1', null)], 'me', '1:2:1', '1:2:1')?.id).toBe('single')
+  })
+
+  it('merges word boxes into one band per line', () => {
+    const bands = selectionBands([
+      { line: 3, left: 200, top: 10, right: 260, bottom: 40 },
+      { line: 3, left: 100, top: 12, right: 180, bottom: 42 },
+      { line: 4, left: 300, top: 60, right: 380, bottom: 90 },
+    ])
+    expect(bands).toEqual([
+      { line: 3, left: 100, top: 10, width: 160, height: 32 },
+      { line: 4, left: 300, top: 60, width: 80, height: 30 },
+    ])
+  })
+
+  it('returns no bands for an empty selection', () => {
+    expect(selectionBands([])).toEqual([])
+  })
+})
+
+describe('highlightRuns', () => {
+  const order = ['a', 'b', 'c', 'd', 'e']
+
+  it('joins consecutive words of the same colour into one run', () => {
+    const colors = new Map([['a', 'yellow'], ['b', 'yellow'], ['c', 'yellow']])
+    expect(highlightRuns(order, colors)).toEqual([{ color: 'yellow', ids: ['a', 'b', 'c'] }])
+  })
+
+  it('splits a run at an unhighlighted word or a colour change', () => {
+    const colors = new Map([['a', 'yellow'], ['b', 'green'], ['d', 'green'], ['e', 'green']])
+    expect(highlightRuns(order, colors)).toEqual([
+      { color: 'yellow', ids: ['a'] },
+      { color: 'green', ids: ['b'] },
+      { color: 'green', ids: ['d', 'e'] },
+    ])
+  })
+
+  it('returns nothing when nothing is highlighted', () => {
+    expect(highlightRuns(order, new Map())).toEqual([])
+  })
+})
+
+describe('surah names on a page and in the selection title', () => {
+  const surahs = [
+    { number: 1, arabic: 'الفاتحة', english: 'Al-Fatihah' },
+    { number: 2, arabic: 'البقرة', english: 'Al-Baqarah' },
+  ]
+  const word = (surah: number, ayah: number, i: number) => ({ id: `${surah}:${ayah}:${i}`, surah, ayah, wordIndex: i, text: 'x' })
+
+  it('lists the surahs present on a page from the API data', () => {
+    const verses = [
+      { verse_key: '1:7', words: [{ position: 1, char_type_name: 'word', text_uthmani: 'x', line_number: 2 }] },
+      { verse_key: '2:1', words: [{ position: 1, char_type_name: 'word', text_uthmani: 'y', line_number: 5 }] },
+    ]
+    const page = pageFromQuranCom(1, verses, { 1: { name: 'الفاتحة', bismillahPre: false, simpleName: 'Al-Fatihah' }, 2: { name: 'البقرة', bismillahPre: true, simpleName: 'Al-Baqarah' } })
+    expect(page.surahs).toEqual(surahs)
+  })
+
+  it('leaves surahs out when names are unavailable', () => {
+    expect(pageFromQuranCom(1, [{ verse_key: '1:1', words: [] }]).surahs).toBeUndefined()
+  })
+
+  it('names one ayah, a span of ayat, and a span across surahs', () => {
+    expect(describeSelection([word(2, 5, 1), word(2, 5, 3)], surahs)).toBe('Al-Baqarah · Ayah 5')
+    expect(describeSelection([word(2, 5, 1), word(2, 7, 2)], surahs)).toBe('Al-Baqarah · Ayat 5–7')
+    expect(describeSelection([word(1, 7, 4), word(2, 1, 1)], surahs)).toBe('Al-Fatihah 7 – Al-Baqarah 1')
+  })
+
+  it('falls back to the surah number without names', () => {
+    expect(describeSelection([word(2, 5, 1)])).toBe('Surah 2 · Ayah 5')
+  })
+})
+
+describe('notesOnPage', () => {
+  // Page holds the end of verse 2:5 (words 7-8) and the start of 2:6.
+  const page = pageFromQuranCom(3, [
+    { verse_key: '2:5', words: [{ position: 7, char_type_name: 'word', text_uthmani: 'a', line_number: 1 }, { position: 8, char_type_name: 'word', text_uthmani: 'b', line_number: 1 }] },
+    { verse_key: '2:6', words: [{ position: 1, char_type_name: 'word', text_uthmani: 'c', line_number: 2 }] },
+  ])
+  const base = { sessionId: 's', authorId: 'u', bookingId: null, color: null, errorType: null, createdAt: '', noteText: 'x', endWordRef: null }
+  const note = (id: string, wordRef: string | null, verseRef: string): MushafAnnotation => ({ ...base, id, kind: 'note', wordRef, verseRef })
+
+  it('keeps comments whose word is on this page', () => {
+    expect(notesOnPage(page, [note('a', '2:5:7', '2:5')]).map((n) => n.id)).toEqual(['a'])
+  })
+
+  it('drops comments on the part of a verse that sits on another page', () => {
+    expect(notesOnPage(page, [note('b', '2:5:2', '2:5')])).toEqual([])
+  })
+
+  it('shows a verse-level comment only on the page where its verse starts', () => {
+    expect(notesOnPage(page, [note('c', null, '2:5'), note('d', null, '2:6')]).map((n) => n.id)).toEqual(['d'])
+  })
+})
+
+describe('Quran scripts', () => {
+  const word = { id: '2:6:1', surah: 2, ayah: 6, wordIndex: 1, text: 'إِنَّ', indopak: 'اِنَّ', glyph: 'ﭑ', fontPage: 3 }
+  const marker = { id: '2:6:12', surah: 2, ayah: 6, wordIndex: 12, text: '٦', isMarker: true, glyph: 'ﭒ' }
+
+  it('draws Madinah glyphs only once the page font is ready', () => {
+    expect(renderModeFor('madinah', true)).toBe('qcf')
+    expect(renderModeFor('indopak', true)).toBe('indopak')
+    expect(renderModeFor('madinah', false)).toBe('text')
+    expect(renderModeFor('indopak', false)).toBe('text')
+  })
+
+  it('shows the right text for each mode', () => {
+    expect(wordDisplay(word, 'qcf')).toBe('ﭑ')
+    expect(wordDisplay(word, 'indopak')).toBe('اِنَّ')
+    expect(wordDisplay(word, 'text')).toBe('إِنَّ')
+  })
+
+  it('wraps verse numbers in ornate brackets outside the Madinah glyph font', () => {
+    expect(wordDisplay(marker, 'qcf')).toBe('ﭒ')
+    expect(wordDisplay(marker, 'indopak')).toBe('﴿٦﴾')
+  })
+
+  it('falls back to Uthmani text when a word has no IndoPak spelling', () => {
+    expect(wordDisplay({ ...word, indopak: undefined }, 'indopak')).toBe('إِنَّ')
+  })
+
+  it('keeps the IndoPak spelling from the API, without its stray right-to-left mark', () => {
+    const page = pageFromQuranCom(3, [
+      { verse_key: '2:6', words: [{ position: 11, char_type_name: 'word', text_uthmani: 'يُؤْمِنُونَ', text_indopak: 'يُؤۡمِنُوۡنَ\u200f', line_number: 2 }] },
+    ])
+    expect(page.lines[0].words[0].indopak).toBe('يُؤۡمِنُوۡنَ')
   })
 })

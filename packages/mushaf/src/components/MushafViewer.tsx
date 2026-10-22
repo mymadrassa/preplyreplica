@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { canDeleteAnnotation } from '../annotations'
 import { authorLabel, capabilitiesFor, type MushafRole } from '../permissions'
+import type { MushafScript } from '../script'
 import type { MushafClient } from '../session'
-import { buildMarkBlocks, flattenWords, wordsBetween, type MarkBlock } from '../selection'
+import { buildMarkBlocks, describeSelection, findEditableNote, notesOnPage, flattenWords, wordsBetween, type MarkBlock } from '../selection'
 import type { MushafWord } from '../types'
 import { useMushafPage } from '../useMushafPage'
 import { useMushafSync } from '../useMushafSync'
@@ -15,7 +16,10 @@ import { HintTooltip } from './HintTooltip'
 import { Icon } from './icons'
 import { LoadingBlock } from './Spinner'
 import { MushafPage } from './MushafPage'
+import { ColumnResizeHandle } from './ColumnResizeHandle'
 import { PageNav } from './PageNav'
+import { ResizableFrame } from './ResizableFrame'
+import { ScriptSelect } from './ScriptSelect'
 import { SurahSearch } from './SurahSearch'
 import { ThemeToggle } from './ThemeToggle'
 import { MarksSummary } from './MarksSummary'
@@ -39,6 +43,8 @@ interface MushafViewerProps {
 type MarkFilter = 'all' | 'teacher'
 
 const SUMMARY_CLOSE_MS = 300
+const SUMMARY_WIDTH = { default: 272, min: 200, max: 520 }
+const SUMMARY_WIDTH_KEY = 'mushaf-summary-width'
 
 export interface MushafLesson {
   id: string
@@ -61,7 +67,8 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
   // `detachedPage` is that private view, and null means following the shared page.
   const [detachedPage, setDetachedPage] = useState<number | null>(null)
   const viewPage = detachedPage ?? sync.currentPage
-  const { page, loading: pageLoading } = useMushafPage(viewPage)
+  const [script, setScript] = useState<MushafScript>('madinah')
+  const { page, loading: pageLoading } = useMushafPage(viewPage, script)
   const [lessonFilter, setLessonFilter] = useState<string>(bookingId ?? 'all')
   const [selection, setSelection] = useState<Selection | null>(null)
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -86,7 +93,6 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
   }, [page, selection])
   const selectedIds = useMemo(() => new Set(selectedWords.map((w) => w.id)), [selectedWords])
 
-  const pageVerseRefs = useMemo(() => new Set(page?.lines.flatMap((l) => l.words.map((w) => `${w.surah}:${w.ayah}`)) ?? []), [page])
 
   const visibleAnnotations = useMemo(
     () =>
@@ -104,10 +110,11 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
     [sync.strokes, filter, teacherId, lessonFilter, hiddenStrokeIds]
   )
   const myLastStroke = [...sync.strokes].reverse().find((x) => x.page === viewPage && x.authorId === currentUserId)
-  const pageNotes = visibleAnnotations.filter((a) => a.kind === 'note' && pageVerseRefs.has(a.verseRef))
+  // Only this page's comments: a verse running onto the next page doesn't drag its comments along.
+  const pageNotes = useMemo(() => (page ? notesOnPage(page, visibleAnnotations) : []), [page, visibleAnnotations])
 
   const blocks = useMemo(() => (page ? buildMarkBlocks(page, visibleAnnotations) : []), [page, visibleAnnotations])
-  const verseNotes = visibleAnnotations.filter((a) => a.kind === 'note' && !a.wordRef && pageVerseRefs.has(a.verseRef))
+  const verseNotes = pageNotes.filter((a) => !a.wordRef)
   const hasMarks = blocks.length > 0 || verseNotes.length > 0
 
   function clearSelection() {
@@ -127,22 +134,30 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
 
     // Second click: end the range (the same word again = just that word) and open the toolbar.
     setSelection({ startId: selection.startId, endId: word.id === selection.startId ? null : word.id, committed: true })
-    const container = pageRef.current?.getBoundingClientRect()
-    if (container) {
-      const rect = element.getBoundingClientRect()
-      // The toolbar is 18rem (288px) wide and centred on x: keep it inside the page.
-      const x = Math.min(Math.max(rect.left - container.left + rect.width / 2, 150), Math.max(container.width - 150, 150))
-      setAnchor({ x, y: rect.bottom - container.top + 8 })
-    }
+    anchorBelow(element)
     setToolbarOpen(true)
   }
 
+  // Places the floating toolbar under a word. It is 18rem (288px) wide and centred: keep it inside the page.
+  function anchorBelow(element: Element) {
+    const container = pageRef.current?.getBoundingClientRect()
+    if (!container) return
+    const rect = element.getBoundingClientRect()
+    const x = Math.min(Math.max(rect.left - container.left + rect.width / 2, 150), Math.max(container.width - 150, 150))
+    setAnchor({ x, y: rect.bottom - container.top + 8 })
+  }
+
+  // Clicking a summary card selects its phrase and opens the toolbar on it, so its marks can be changed in place.
   function focusBlock(block: MarkBlock) {
     const first = block.words[0]
     const last = block.words[block.words.length - 1]
     setSelection({ startId: first.id, endId: first.id === last.id ? null : last.id, committed: true })
-    setToolbarOpen(false)
-    setAnchor(null)
+
+    const element = pageRef.current?.querySelector(`[data-word-id="${CSS.escape(last.id)}"]`)
+    if (!element) return
+    element.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    anchorBelow(element)
+    setToolbarOpen(true)
   }
 
   async function handleDelete(annotationId: string) {
@@ -151,12 +166,11 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
   }
 
   const hasSelection = selectedWords.length > 0
-  const selectionHasMarks = blocks.some((block) => block.words.some((w) => selectedIds.has(w.id)))
 
-  // Clicking anywhere outside the words, the toolbar and the summary drops a
-  // selection that has no marks on it (a marked one stays, tied to its card).
+  // Clicking anywhere outside the words, the toolbar and the summary drops the
+  // selection and closes the toolbar. Marks on those words are untouched.
   useEffect(() => {
-    if (!selection || selectionHasMarks) return
+    if (!selection) return
     function onPointerDown(event: PointerEvent) {
       if ((event.target as Element | null)?.closest('[data-word-id], [data-mushaf-keep]')) return
       clearSelection()
@@ -165,13 +179,31 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
     return () => document.removeEventListener('pointerdown', onPointerDown)
     // clearSelection only sets state, so it is safe to omit from the dependencies.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection, selectionHasMarks])
+  }, [selection])
   const pending = !!selection && !selection.committed
   const showPanel = hasMarks && panelOpen && !!page
 
   // Hiding the summary yourself slides the column shut so the page grows back smoothly;
   // everything else (deleting the last card, switching pages) changes the layout at once.
   const [summaryClosing, setSummaryClosing] = useState(false)
+
+  // The summary column's width can be dragged; it's remembered in this browser.
+  const [summaryWidth, setSummaryWidth] = useState(SUMMARY_WIDTH.default)
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SUMMARY_WIDTH_KEY))
+      if (saved >= SUMMARY_WIDTH.min && saved <= SUMMARY_WIDTH.max) setSummaryWidth(saved)
+    } catch {
+      // storage unavailable: keep the default width
+    }
+  }, [])
+  function rememberSummaryWidth(width: number) {
+    try {
+      window.localStorage.setItem(SUMMARY_WIDTH_KEY, String(Math.round(width)))
+    } catch {
+      // ignore: the width still applies for this visit
+    }
+  }
   function hideSummary() {
     setSummaryClosing(true)
     window.setTimeout(() => {
@@ -267,6 +299,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
               else setDetachedPage(startPage)
             }}
           />
+          <ScriptSelect script={script} onChange={setScript} />
           <ThemeToggle dark={dark} onChange={setDark} />
           <HintTooltip active={pending}>
             Click a word to start a selection, then click another word to end it. Click the same word again to select just that one. Click outside to cancel.
@@ -275,22 +308,35 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
       </div>
 
       <div
-        className={showPanel ? 'gap-4 space-y-4 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:space-y-0' : ''}
+        className={showPanel ? 'gap-4 space-y-4 lg:grid lg:items-start lg:space-y-0' : ''}
         style={
           showPanel
             ? {
-                transition: `grid-template-columns ${SUMMARY_CLOSE_MS}ms ease, column-gap ${SUMMARY_CLOSE_MS}ms ease`,
-                ...(summaryClosing ? { gridTemplateColumns: '0rem minmax(0, 1fr)', columnGap: '0rem' } : {}),
+                gridTemplateColumns: summaryClosing ? '0rem minmax(0, 1fr)' : `${summaryWidth}px minmax(0, 1fr)`,
+                ...(summaryClosing
+                  ? { columnGap: '0rem', transition: `grid-template-columns ${SUMMARY_CLOSE_MS}ms ease, column-gap ${SUMMARY_CLOSE_MS}ms ease` }
+                  : {}),
               }
             : undefined
         }
       >
         {showPanel ? (
           <div
-            className={summaryClosing ? 'min-w-0 overflow-hidden' : undefined}
+            // Stays in view while the page scrolls; its cards scroll inside it.
+            className={`relative lg:sticky lg:top-20 ${summaryClosing ? 'min-w-0 overflow-hidden' : ''}`}
             style={{ opacity: summaryClosing ? 0 : 1, transition: `opacity ${SUMMARY_CLOSE_MS - 50}ms ease` }}
           >
-            <div style={summaryClosing ? { width: '17rem' } : undefined}>
+            {!summaryClosing ? (
+              <ColumnResizeHandle
+                width={summaryWidth}
+                min={SUMMARY_WIDTH.min}
+                max={SUMMARY_WIDTH.max}
+                defaultWidth={SUMMARY_WIDTH.default}
+                onResize={setSummaryWidth}
+                onResizeEnd={rememberSummaryWidth}
+              />
+            ) : null}
+            <div style={summaryClosing ? { width: summaryWidth } : undefined}>
               <MarksSummary
                 pageNumber={viewPage}
                 blocks={blocks}
@@ -307,8 +353,10 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
         ) : null}
 
         {page ? (
-          <div ref={pageRef} className="relative min-w-0">
-            <MushafPage page={page} annotations={visibleAnnotations} selectedWordIds={selectedIds} selectionPending={pending} dark={dark} onSelectWord={handleSelectWord} />
+          <div className="min-w-0">
+            <ResizableFrame>
+          <div ref={pageRef} className="relative">
+            <MushafPage page={page} annotations={visibleAnnotations} selectedWordIds={selectedIds} selectionPending={pending} dark={dark} script={script} onSelectWord={handleSelectWord} />
             <DrawingLayer
               page={viewPage}
               strokes={visibleStrokes}
@@ -329,15 +377,22 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
                   key={selectedWords.map((w) => w.id).join(',')}
                   markKinds={can.markKinds}
                   words={selectedWords}
+                  title={describeSelection(selectedWords, page.surahs)}
                   existing={visibleAnnotations}
                   currentUserId={currentUserId}
                   onAdd={sync.addAnnotations}
                   onRemove={sync.deleteAnnotations}
                   onError={reportError}
                   onClose={clearSelection}
+                  editableNote={(() => {
+                    const own = findEditableNote(sync.annotations, currentUserId, selectedWords[0].id, selectedWords[selectedWords.length - 1].id)
+                    return own ? { id: own.id, text: own.noteText ?? '' } : null
+                  })()}
                 />
               </div>
             ) : null}
+          </div>
+            </ResizableFrame>
           </div>
         ) : (
           <div className="min-w-0">

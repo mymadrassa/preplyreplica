@@ -9,5 +9,7 @@ export type { MushafClient, MushafSession, MushafSessionResult } from './session
 export { canDeleteAnnotation } from './annotations'
 export { loadMushafPage, getTotalPages } from './data'
 export { useMushafPage } from './useMushafPage'
+export { MUSHAF_SCRIPTS } from './script'
+export type { MushafScript } from './script'
 export type * from './types'
 export { simplifyPoints } from './strokes'
