@@ -1,6 +1,11 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(public)/teachers/[id]/page.tsx
 import { notFound } from 'next/navigation'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { canBeMatched } from '@/lib/gender'
+import { PackageOffer } from '@/components/PackageOffer'
+import { TRIAL, isTier, packagePrice, trialPrice } from '@/lib/pricing'
+import { lessonsLeft } from '@/lib/packages'
+import { hasHadFirstLesson } from '@/lib/trialRule'
 import { BookingForm } from '@/components/BookingForm'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -35,27 +40,16 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
   const isOtherViewer = !!viewerId && !isOwnProfile
   const isPreview = isOwnProfile && searchParams.preview === '1'
 
-  // The teacher, the viewer's role and any existing booking between them don't
-  // depend on each other, so they're fetched together in one round trip. The
-  // booking lookup is only used below if the viewer turns out to be able to book.
-  const [{ data: teacher, error }, viewerProfileResult, existingBookingResult, changesResult] = await Promise.all([
+  // The teacher and the viewer's role don't depend on each other, so they're
+  // fetched together in one round trip.
+  const [{ data: teacher, error }, viewerProfileResult, changesResult] = await Promise.all([
     supabase
       .from('teacher_profiles')
       .select('*, profiles(*), reviews(*, profiles!student_id(full_name))')
       .eq('id', params.id)
       .order('created_at', { referencedTable: 'reviews', ascending: false })
       .single(),
-    isOtherViewer ? supabase.from('profiles').select('role').eq('id', viewerId).single() : null,
-    isOtherViewer
-      ? supabase
-          .from('bookings')
-          .select('id')
-          .eq('student_id', viewerId)
-          .eq('teacher_id', params.id)
-          .not('status', 'in', '(cancelled,rejected)')
-          .limit(1)
-          .maybeSingle()
-      : null,
+    isOtherViewer ? supabase.from('profiles').select('role, gender').eq('id', viewerId).single() : null,
     // In preview, show the teacher's edits awaiting review as they'll appear once approved.
     isPreview ? supabase.from('teacher_profile_changes').select('*').eq('teacher_id', params.id).maybeSingle() : null,
   ])
@@ -75,17 +69,37 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
     avatar_url: changes ? changes.avatar_url : teacher.profiles?.avatar_url ?? null,
   }
 
-  const viewerRole = (viewerProfileResult?.data as { role?: string } | null | undefined)?.role
+  const viewer = viewerProfileResult?.data as { role?: string; gender?: string | null } | null | undefined
+  const viewerRole = viewer?.role
 
-  // Admin approval and Stripe payout setup are independent — a teacher can
-  // be approved before finishing Stripe onboarding, so both are required
+  // Students only see teachers of their own gender (the teacher's is private, so read with the server key).
+  if (viewerRole === 'student') {
+    const { data: teacherGender } = await createSupabaseServiceRoleClient().from('profiles').select('gender').eq('id', params.id).maybeSingle()
+    if (!canBeMatched(viewer?.gender, teacherGender?.gender)) return notFound()
+  }
+
+  // Admin approval and payout setup are independent — a teacher can
+  // be approved before finishing payout setup, so both are required
   // before a student can actually get through checkout.
-  const canBook = !isOwnProfile && viewerRole !== 'teacher' && viewerRole !== 'admin' && teacher.stripe_charges_enabled
+  const canBook = !isOwnProfile && viewerRole !== 'teacher' && viewerRole !== 'admin' && teacher.payments_enabled
 
-  // A free trial is only offered for first contact with this teacher — any
-  // non-cancelled/rejected booking (trial or normal) already disqualifies
-  // them. Re-validated server-side again in /api/bookings before charging.
-  const isTrialEligible = canBook && !!viewerId && !existingBookingResult?.data
+
+  // Trial first; after it, lessons with this teacher come from a package only.
+  const packageRequired = canBook && !!viewerId && (await hasHadFirstLesson(supabase, viewerId, teacher.id))
+  const tier = isTier(teacher.tier) ? teacher.tier : 'starter'
+  const trial = trialPrice()
+  const pkgPricing = packagePrice(teacher.hourly_rate, tier)
+  // The signed-in student's live package with this teacher, if any.
+  const { data: activePackage } =
+    canBook && viewerId
+      ? await supabase
+          .from('lesson_packages')
+          .select('id, lessons_total, lessons_used, expires_at')
+          .eq('student_id', viewerId)
+          .eq('teacher_id', teacher.id)
+          .eq('status', 'active')
+          .maybeSingle()
+      : { data: null }
 
   return (
     <main className="container mx-auto px-4 py-12">
@@ -173,25 +187,32 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
         <aside className="space-y-6">
           <Card>
             <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.2em] text-brand-700">Hourly rate</p>
-              <p className="text-3xl font-semibold text-slate-900">£{teacher.hourly_rate}</p>
-              <p className="text-slate-600">Pay securely with Stripe and join the Jitsi meeting when the lesson starts.</p>
+              <p className="text-sm uppercase tracking-[0.2em] text-brand-700">How it works</p>
+              <p className="text-slate-700">
+                <strong>1. Trial:</strong> {TRIAL.minutes} minutes for £{trial.studentPays.toFixed(2)}.
+                <br />
+                <strong>2. Then:</strong> {pkgPricing.lessons} one-hour lessons for £{pkgPricing.price.toFixed(2)} (£{pkgPricing.perLesson.toFixed(2)} a lesson).
+              </p>
+              <p className="text-slate-600">Pay securely online and join the Jitsi meeting when the lesson starts.</p>
             </div>
           </Card>
           {viewerId && !isOwnProfile && viewerRole === 'student' ? (
             <ChatButton studentId={viewerId} teacherId={teacher.id} teacherName={teacher.profiles?.full_name ?? 'this teacher'} />
           ) : null}
+          {packageRequired && !activePackage ? (
+            <PackageOffer teacherId={teacher.id} teacherName={teacher.profiles?.full_name ?? 'this teacher'} pricing={pkgPricing} highlight={packageRequired || searchParams.intent === 'package'} />
+          ) : null}
           {canBook ? (
             <BookingForm
-              teacher={{ id: teacher.id, hourly_rate: teacher.hourly_rate, subjects: teacher.subjects, languages: teacher.languages }}
-              isTrialEligible={isTrialEligible}
-              defaultAsTrial={searchParams.intent === 'trial'}
+              teacher={{ id: teacher.id, hourly_rate: teacher.hourly_rate, tier, subjects: teacher.subjects, languages: teacher.languages }}
+              packageRequired={packageRequired}
+              activePackage={activePackage ? { id: activePackage.id, lessonsLeft: lessonsLeft(activePackage), expiresAt: activePackage.expires_at } : null}
             />
           ) : isOwnProfile ? (
             <Card>
               <p className="text-slate-600">Students book you from this panel. Manage your details from your Profile page.</p>
             </Card>
-          ) : viewerRole !== 'teacher' && viewerRole !== 'admin' && !teacher.stripe_charges_enabled ? (
+          ) : viewerRole !== 'teacher' && viewerRole !== 'admin' && !teacher.payments_enabled ? (
             <Card>
               <p className="text-slate-600">This teacher hasn't finished setting up payments yet and isn't accepting bookings right now. Check back soon.</p>
             </Card>

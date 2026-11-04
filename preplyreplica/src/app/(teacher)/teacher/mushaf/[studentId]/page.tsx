@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getOrCreateMushafSession } from '@preply-clone/mushaf'
 import { createServerClient } from '@/lib/supabase/server'
 import { getPairLessons } from '@/lib/mushafLessons'
+import { loadHomeworkItems } from '@/lib/homeworkItems'
 import { MushafSessionView } from '@/components/MushafSessionView'
 
 export default async function TeacherMushafPage({
@@ -20,10 +21,11 @@ export default async function TeacherMushafPage({
 
   // Independent lookups, fetched together in one round trip. The database refuses to
   // create a shared session for a pair with no booking or conversation.
-  const [{ data: student }, result, { lessons, activeBookingId }] = await Promise.all([
+  const [{ data: student }, result, { lessons, activeBookingId, currentLessonId }, homework] = await Promise.all([
     supabase.from('profiles').select('id, full_name').eq('id', params.studentId).single(),
     getOrCreateMushafSession(supabase, params.studentId, userId),
     getPairLessons(supabase, params.studentId, userId, searchParams.booking),
+    loadHomeworkItems(supabase, { studentId: params.studentId, teacherId: userId }),
   ])
   if (!student || 'error' in result) return notFound()
 
@@ -38,6 +40,16 @@ export default async function TeacherMushafPage({
         initialPage={result.session.current_page}
         bookingId={activeBookingId}
         lessons={lessons}
+        homework={{
+          items: homework,
+          canTick: false,
+          assign: currentLessonId
+            ? {
+                href: `/teacher/homework/${currentLessonId}?back=${encodeURIComponent(`/teacher/mushaf/${params.studentId}`)}`,
+                label: homework.some((item) => item.bookingId === currentLessonId) ? 'Edit this lesson’s homework' : 'Assign homework',
+              }
+            : null,
+        }}
       />
     </main>
   )

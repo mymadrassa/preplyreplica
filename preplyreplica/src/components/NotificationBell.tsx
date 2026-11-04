@@ -12,7 +12,7 @@ export interface AppNotification {
 }
 
 /** Top-bar bell listing what still needs doing; each item links to where it's fixed. */
-export function NotificationBell({ notifications }: { notifications: AppNotification[] }) {
+export function NotificationBell({ notifications, heading = 'To finish before approval' }: { notifications: AppNotification[]; heading?: string }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -33,7 +33,7 @@ export function NotificationBell({ notifications }: { notifications: AppNotifica
   }, [open])
 
   const count = notifications.length
-  const label = count ? `${count} thing${count === 1 ? '' : 's'} to finish` : 'Notifications'
+  const label = count ? `${count} notification${count === 1 ? '' : 's'}` : 'Notifications'
 
   return (
     <div ref={rootRef} className="relative">
@@ -57,7 +57,7 @@ export function NotificationBell({ notifications }: { notifications: AppNotifica
       {open ? (
         <div role="menu" className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-lift">
           <p className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
-            {count ? 'To finish before approval' : 'Notifications'}
+            {count ? heading : 'Notifications'}
           </p>
           {count ? (
             <ul className="max-h-96 overflow-y-auto p-1.5">

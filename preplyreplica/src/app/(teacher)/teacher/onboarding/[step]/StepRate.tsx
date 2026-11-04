@@ -5,9 +5,10 @@ import { WizardShell } from '@/components/onboarding/WizardShell'
 import { useTeacherWizard } from '@/components/onboarding/TeacherWizardProvider'
 import { useTeacherStepGuard } from '@/components/onboarding/useTeacherStepGuard'
 import { TEACHER_WIZARD_STEPS } from './steps'
+import { TIERS, packagePrice } from '@/lib/pricing'
 
 // £10/hour floor: even at the shortest lesson (30 min) and the lowest rate
-// allowed, the platform's 40% commission still comfortably covers Stripe's
+// allowed, the platform's 40% commission still comfortably covers the card processor's
 // processing fee (1.5% + £0.20) on top of everything else -- this isn't an
 // arbitrary number, it's the line above which the platform's own costs are
 // definitely covered, no matter the lesson length.
@@ -49,6 +50,13 @@ export function StepRate() {
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-400">Minimum £{MIN_RATE}/hour — covers platform and payment processing costs.</p>
+      {Number(state.hourlyRate) >= MIN_RATE ? (
+        <p className="mt-2 text-sm text-slate-600">
+          You receive the full £{Number(state.hourlyRate).toFixed(2)} per lesson. As a new {TIERS.starter.label} teacher, students pay £
+          {packagePrice(Number(state.hourlyRate), 'starter').perLesson.toFixed(2)} a lesson in their 10-lesson package (after a fixed-price trial). Our commission drops as
+          you move up tiers.
+        </p>
+      ) : null}
     </WizardShell>
   )
 }

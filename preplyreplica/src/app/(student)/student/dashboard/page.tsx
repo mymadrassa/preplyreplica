@@ -22,7 +22,7 @@ export default async function StudentDashboardPage() {
 
   // Preferences are only present if the student came through the onboarding
   // wizard — direct /auth/register signups simply don't get that section.
-  const [{ data: bookings }, { data: preferences }] = await Promise.all([
+  const [{ data: bookings }, { data: preferences }, { data: me }] = await Promise.all([
     supabase
       .from('bookings')
       .select('*, teacher_profiles(*, profiles(*))')
@@ -30,12 +30,14 @@ export default async function StudentDashboardPage() {
       .order('start_at', { ascending: true })
       .limit(10),
     supabase.from('student_preferences').select('courses, weekly_slots').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('gender').eq('id', userId).maybeSingle(),
   ])
 
   const recommendedTeachers = preferences
     ? await fetchRankedTeachers(
         supabase,
         { courses: preferences.courses, weeklySlots: (preferences.weekly_slots as StudentSignal['weeklySlots']) ?? [] },
+        me?.gender ?? null,
         6
       )
     : []

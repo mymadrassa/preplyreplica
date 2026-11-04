@@ -8,6 +8,7 @@ import { useToast } from '@/components/ToastProvider'
 import { InfoTooltip } from '@/components/InfoTooltip'
 import { SUBJECTS, LANGUAGES } from '@/lib/constants'
 import { normalizeVideoUrl } from '@/lib/videoUrl'
+import { TIERS, packagePrice, type Tier } from '@/lib/pricing'
 
 const VIDEO_HELP_TEXT = 'Supported: YouTube, Vimeo, or Google Drive links, or a video file uploaded during onboarding. Please keep it to 90 seconds or less.'
 
@@ -51,11 +52,14 @@ export function TeacherDetailsForm({
   initial,
   onSaved,
   onCancel,
+  tier = 'starter',
 }: {
   initial: TeacherDetails
   /** Called after a successful save; `pendingReview` is true when the change waits for admin review. */
   onSaved?: (pendingReview: boolean) => void
   onCancel?: () => void
+  /** The teacher's tier, for the "students pay …" hint under the rate. */
+  tier?: Tier
 }) {
   const { showToast } = useToast()
   const [headline, setHeadline] = useState(initial.headline ?? '')
@@ -110,7 +114,15 @@ export function TeacherDetailsForm({
       <TextArea label="Bio" name="bio" rows={5} value={bio} onChange={(event) => setBio(event.target.value)} required />
       <ChoiceGroup label="Languages" options={LANGUAGES} value={languages} onChange={setLanguages} />
       <ChoiceGroup label="Subjects" options={SUBJECTS} value={subjects} onChange={setSubjects} />
-      <Input label="Hourly rate (£)" name="hourlyRate" type="number" min={8} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
+      <div>
+        <Input label="Hourly rate (£)" name="hourlyRate" type="number" min={8} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
+        {Number(hourlyRate) >= 8 ? (
+          <p className="mt-2 text-xs text-slate-500">
+            You receive the full rate. At your {TIERS[tier].label} tier ({Math.round(TIERS[tier].commission * 100)}% commission), students pay £
+            {packagePrice(Number(hourlyRate), tier).perLesson.toFixed(2)} a lesson in their 10-lesson package.
+          </p>
+        ) : null}
+      </div>
       <div>
         <Input
           label={

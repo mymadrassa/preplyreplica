@@ -1,6 +1,9 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(public)/teachers/page.tsx
 import Link from 'next/link'
 import { getTeacherCatalogue } from '@/lib/teacherCatalogue'
+import { createServerClient } from '@/lib/supabase/server'
+import { filterTeachersForViewer, GENDERS, type TeacherViewer } from '@/lib/gender'
+import { isTier, packagePrice } from '@/lib/pricing'
 import { TeacherCard } from '@/components/TeacherCard'
 import { Select } from '@/components/Select'
 import { Input } from '@/components/Input'
@@ -20,7 +23,18 @@ interface TeachersPageProps {
 // of role (student, teacher, admin, or logged out) — only the booking
 // action itself is restricted to students, on the individual teacher page.
 export default async function TeachersPage({ searchParams }: TeachersPageProps) {
-  const allTeachers = await getTeacherCatalogue()
+  const supabase = createServerClient()
+  const [catalogue, { data: auth }] = await Promise.all([getTeacherCatalogue(), supabase.auth.getSession()])
+  const viewerId = auth.session?.user?.id
+  const { data: me } = viewerId ? await supabase.from('profiles').select('role, gender').eq('id', viewerId).maybeSingle() : { data: null }
+  const viewer: TeacherViewer = { role: (me?.role as TeacherViewer['role']) ?? null, gender: me?.gender ?? null }
+  // Signed-in students only see teachers of their own gender; guests see everyone.
+  // Lessons are bought as a package after the trial: the per-lesson price depends on the teacher's rate and tier.
+  const allTeachers = filterTeachersForViewer(catalogue, viewer, (teacher) => teacher.profiles?.gender).map((teacher) => ({
+    ...teacher,
+    lessonPrice: packagePrice(teacher.hourly_rate, isTier(teacher.tier) ? teacher.tier : 'starter').perLesson,
+  }))
+  const matchedTo = viewer.role === 'student' ? GENDERS.find((g) => g.value === viewer.gender) : undefined
   const subjectOptions = SUBJECTS
   const languageOptions = LANGUAGES
 
@@ -32,10 +46,10 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
   const filteredTeachers = allTeachers
     .filter((teacher) => (subject ? teacher.subjects?.includes(subject) : true))
     .filter((teacher) => (language ? teacher.languages?.includes(language) : true))
-    .filter((teacher) => (maxPrice ? teacher.hourly_rate <= Number(maxPrice) : true))
+    .filter((teacher) => (maxPrice ? teacher.lessonPrice <= Number(maxPrice) : true))
     .sort((a, b) => {
-      if (sort === 'price_asc') return a.hourly_rate - b.hourly_rate
-      if (sort === 'price_desc') return b.hourly_rate - a.hourly_rate
+      if (sort === 'price_asc') return a.lessonPrice - b.lessonPrice
+      if (sort === 'price_desc') return b.lessonPrice - a.lessonPrice
       return Number(b.rating_avg) - Number(a.rating_avg)
     })
 
@@ -47,6 +61,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-700">Teachers</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">Approved tutors available now</h1>
+          {matchedTo ? <p className="mt-1 text-sm text-slate-500">Showing {matchedTo.teachers}</p> : null}
         </div>
         <Link href="/auth/register?role=teacher">
           <span className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-900/10 transition-all hover:-translate-y-px hover:bg-brand-700 hover:shadow-md">
@@ -68,7 +83,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
           defaultValue={language}
           options={[{ value: '', label: 'Any language' }, ...languageOptions.map((item) => ({ value: item, label: item }))]}
         />
-        <Input label="Max hourly rate" name="maxPrice" type="number" min={0} defaultValue={maxPrice} placeholder="Any price" />
+        <Input label="Max price per lesson" name="maxPrice" type="number" min={0} defaultValue={maxPrice} placeholder="Any price" />
         <Select
           label="Sort by"
           name="sort"
@@ -99,7 +114,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
                 full_name: teacher.profiles?.full_name ?? 'Teacher',
                 headline: teacher.headline,
                 rating_avg: Number(teacher.rating_avg),
-                hourly_rate: teacher.hourly_rate,
+                lesson_price: teacher.lessonPrice,
                 subjects: teacher.subjects,
                 languages: teacher.languages,
                 status: teacher.status,

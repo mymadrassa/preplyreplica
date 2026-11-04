@@ -7,10 +7,18 @@ import { Button } from '@/components/Button'
 import { useToast } from '@/components/ToastProvider'
 import { createBrowserClient } from '@/lib/supabase/client'
 import type { DocumentRow } from '@/lib/teacherProfileState'
+import { ALLOWED_KINDS, ALLOWED_LABEL, EXTENSION_BY_KIND, MAX_BYTES, MIME_BY_KIND, kindFromMime } from '@/lib/fileSignature'
 
-const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024
-const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+const PHOTO_TYPES = ALLOWED_KINDS.photo.map((k) => MIME_BY_KIND[k])
+const DOCUMENT_TYPES = ALLOWED_KINDS.document.map((k) => MIME_BY_KIND[k])
+const MAX_PHOTO_BYTES = MAX_BYTES.photo
+const MAX_DOCUMENT_BYTES = MAX_BYTES.document
+
+/** Stored name: a timestamp plus the extension of its declared type (the server checks the content matches). */
+function storedName(file: File) {
+  const kind = kindFromMime(file.type)
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${kind ? EXTENSION_BY_KIND[kind] : 'bin'}`
+}
 
 function safeFileName(name: string) {
   return name.replace(/[^\w.-]+/g, '_').slice(-80)
@@ -50,7 +58,7 @@ export function PhotoUploader({ userId, current, onDone, reviewed = false }: { u
     if (!file) return
     setSaving(true)
     const supabase = createBrowserClient()
-    const path = `${userId}/${Date.now()}-${safeFileName(file.name)}`
+    const path = `${userId}/${storedName(file)}`
     const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type })
     if (uploadError) {
       setSaving(false)
@@ -141,6 +149,8 @@ export function DocumentsStep({
   async function upload(files: FileList | null, replaces?: string) {
     if (!files?.length) return
     if (!confirmReviewed()) return
+    const wrongType = Array.from(files).find((f) => !DOCUMENT_TYPES.includes(f.type))
+    if (wrongType) return showToast('error', `${wrongType.name}: only ${ALLOWED_LABEL.document} files are accepted.`)
     const tooBig = Array.from(files).find((f) => f.size > MAX_DOCUMENT_BYTES)
     if (tooBig) return showToast('error', `${tooBig.name} is over 10 MB.`)
 
@@ -152,7 +162,7 @@ export function DocumentsStep({
     }
     const supabase = createBrowserClient()
     for (const file of Array.from(files)) {
-      const path = `${userId}/${kind}/${Date.now()}-${safeFileName(file.name)}`
+      const path = `${userId}/${kind}/${storedName(file)}`
       const { error: uploadError } = await supabase.storage.from('teacher-documents').upload(path, file, { contentType: file.type })
       if (uploadError) {
         done()
@@ -231,7 +241,7 @@ export function DocumentsStep({
                   <RefreshCw className={`h-4 w-4 ${replacing === doc.id ? 'animate-spin' : ''}`} aria-hidden="true" />
                   <input
                     type="file"
-                    accept="application/pdf,image/*"
+                    accept={DOCUMENT_TYPES.join(',')}
                     className="sr-only"
                     disabled={replacing !== null}
                     onChange={(event) => {
@@ -269,11 +279,11 @@ export function DocumentsStep({
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
           {uploading ? 'Uploading…' : documents.length ? 'Add another file' : 'Upload a file'}
-          <input type="file" accept="application/pdf,image/*" multiple className="sr-only" disabled={uploading} onChange={(event) => upload(event.target.files)} />
+          <input type="file" accept={DOCUMENT_TYPES.join(',')} multiple className="sr-only" disabled={uploading} onChange={(event) => upload(event.target.files)} />
         </label>
       ) : null}
       <p className="flex items-center gap-1.5 text-xs text-slate-500">
-        <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> PDF or image, up to 10 MB each. Stored privately; only our review team can see it.
+        <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> PDF, JPEG, PNG or WebP, up to 10 MB each. Stored privately; only our review team can see it.
         {reviewed ? ' Your profile is live: ID changes need a quick review, and your current ID stays valid until then.' : ''}
       </p>
     </div>

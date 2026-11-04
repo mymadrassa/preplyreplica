@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import { createTeacherConnectAccount, createTeacherConnectAccountLink } from '@/lib/stripe'
+import { getPaymentProvider, paymentErrorMessage } from '@/lib/payments'
+import { startPayoutSetup } from '@/lib/payments/payoutSetup'
 
 /**
- * Starts or continues Stripe Connect onboarding on its own, without
+ * Starts or continues payout account setup on its own, without
  * re-sending the profile. Payouts don't need review, so this works whatever
  * the profile's status.
  */
@@ -15,24 +16,18 @@ export async function POST() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: teacher } = await supabase.from('teacher_profiles').select('stripe_account_id, stripe_charges_enabled').eq('id', user.id).maybeSingle()
+  const { data: teacher } = await supabase.from('teacher_profiles').select('payout_account_id, payment_provider, payments_enabled').eq('id', user.id).maybeSingle()
   if (!teacher) {
     return NextResponse.json({ error: 'Finish your teacher profile first.' }, { status: 409 })
   }
-  if (teacher.stripe_charges_enabled) {
-    return NextResponse.json({ error: 'Stripe is already connected.' }, { status: 409 })
+  if (teacher.payments_enabled) {
+    return NextResponse.json({ error: 'Payouts are already set up.' }, { status: 409 })
   }
 
   try {
-    let accountId = teacher.stripe_account_id
-    if (!accountId) {
-      const account = await createTeacherConnectAccount(user.email || '')
-      accountId = account.id
-      await supabase.from('teacher_profiles').update({ stripe_account_id: accountId }).eq('id', user.id)
-    }
-    const link = await createTeacherConnectAccountLink(accountId)
-    return NextResponse.json({ onboardingUrl: link.url })
-  } catch (stripeError: any) {
-    return NextResponse.json({ error: stripeError?.raw?.message || stripeError?.message || 'Unable to set up Stripe payouts.' }, { status: 502 })
+    const { url } = await startPayoutSetup({ id: user.id, email: user.email || '', ...teacher })
+    return NextResponse.json({ onboardingUrl: url })
+  } catch (error) {
+    return NextResponse.json({ error: paymentErrorMessage(error, `Unable to set up ${getPaymentProvider().displayName} payouts.`) }, { status: 502 })
   }
 }

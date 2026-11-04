@@ -12,6 +12,7 @@ import { useTeacherStepGuard } from '@/components/onboarding/useTeacherStepGuard
 import { normalizeVideoUrl } from '@/lib/videoUrl'
 import { InfoTooltip } from '@/components/InfoTooltip'
 import { TEACHER_WIZARD_STEPS } from './steps'
+import { ALLOWED_KINDS, ALLOWED_LABEL, EXTENSION_BY_KIND, MAX_BYTES, MIME_BY_KIND, kindFromMime } from '@/lib/fileSignature'
 
 const VIDEO_HELP_TEXT = 'Supported: YouTube, Vimeo, or Google Drive links, or upload a video file directly (MP4, WebM, or MOV). Keep it to 90 seconds or less.'
 const MAX_VIDEO_SECONDS = 90
@@ -57,8 +58,11 @@ export function StepMedia() {
     const userId = session.user?.id
     if (!userId) throw new Error('You must be signed in.')
 
-    const path = `${userId}/${Date.now()}-${file.name}`
-    const { error: uploadError } = await supabase.storage.from('teacher-videos').upload(path, file, { upsert: true })
+    const kind = kindFromMime(file.type)
+    if (!kind || !ALLOWED_KINDS.video.includes(kind)) throw new Error(`Only ${ALLOWED_LABEL.video} videos are accepted.`)
+    if (file.size > MAX_BYTES.video) throw new Error('That video is over 50 MB. Please upload a shorter or smaller one.')
+    const path = `${userId}/${Date.now()}.${EXTENSION_BY_KIND[kind]}`
+    const { error: uploadError } = await supabase.storage.from('teacher-videos').upload(path, file, { contentType: file.type })
     if (uploadError) throw new Error(uploadError.message)
 
     const { data } = supabase.storage.from('teacher-videos').getPublicUrl(path)
@@ -85,7 +89,7 @@ export function StepMedia() {
           subjects: state.subjects,
           hourly_rate: Number(state.hourlyRate),
           video_url: videoUrl,
-          start_stripe_onboarding: true,
+          start_payout_setup: true,
         }),
       })
 
@@ -101,7 +105,7 @@ export function StepMedia() {
 
       if (data.onboardingUrl) {
         // Let the teacher choose now-vs-later on StepPayouts, rather than
-        // forcing the Stripe redirect immediately -- patch happens after
+        // forcing the payout-setup redirect immediately -- patch happens after
         // reset() so it survives on the now-empty wizard state.
         patch({ onboardingUrl: data.onboardingUrl })
         router.push('/teacher/onboarding/payouts')
@@ -185,7 +189,7 @@ export function StepMedia() {
               <div>
                 <input
                   type="file"
-                  accept="video/*"
+                  accept={ALLOWED_KINDS.video.map((k) => MIME_BY_KIND[k]).join(',')}
                   onChange={(event) => {
                     setVideoDurationError('')
                     setVideoFile(event.target.files?.[0] ?? null)

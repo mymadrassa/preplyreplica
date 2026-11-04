@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
-import { cancelBookingPayment, refundBookingPayment } from '@/lib/stripe'
+import { paymentRefFor } from '@/lib/payments'
+import { closePackageWithRefund, returnPackageLesson } from '@/lib/packages'
 import { sendBookingRejectedEmail, sendPayoutReviewTimedOutStudentEmail, sendPayoutReviewTimedOutTeacherEmail } from '@/lib/email'
 
 // Session completion no longer auto-fires from here — that now requires
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
   const results: Array<{ bookingId: string; action: string; error?: string }> = []
 
   // Checkout was started (slot held) but never completed — nothing was
-  // ever authorized, so there's no Stripe hold to release, just free the
+  // ever authorized, so there's no payment hold to release, just free the
   // slot in our own data.
   const abandonedCutoff = new Date(Date.now() - ABANDONED_HOLD_MINUTES * 60 * 1000).toISOString()
   const { data: abandoned } = await supabase
@@ -46,23 +47,26 @@ export async function GET(request: Request) {
   const timeoutCutoff = new Date(Date.now() - APPROVAL_TIMEOUT_HOURS * 60 * 60 * 1000).toISOString()
   const { data: unanswered } = await supabase
     .from('bookings')
-    .select('*, teacher_profiles(stripe_account_id, profiles(full_name)), profiles!student_id(full_name, email)')
+    .select('*, teacher_profiles(payout_account_id, profiles(full_name)), profiles!student_id(full_name, email)')
     .eq('status', 'pending')
     .lt('created_at', timeoutCutoff)
 
   for (const booking of unanswered ?? []) {
-    const { data: payment } = await supabase.from('payments').select('*').eq('booking_id', booking.id).single()
-    const teacherAccountId = (booking as any).teacher_profiles?.stripe_account_id
+    // A package lesson has no payment of its own: the lesson goes back to the package.
+    const packageId = booking.package_id
+    const { data: payment } = packageId ? { data: null } : await supabase.from('payments').select('*').eq('booking_id', booking.id).single()
+    const charge = paymentRefFor(payment, (booking as any).teacher_profiles)
 
-    if (!payment?.stripe_payment_intent_id || !teacherAccountId) {
-      results.push({ bookingId: booking.id, action: 'skipped', error: 'Missing payment or Stripe account' })
+    if (!packageId && (!payment || !charge)) {
+      results.push({ bookingId: booking.id, action: 'skipped', error: 'Missing payment or payout account' })
       continue
     }
 
     try {
-      await cancelBookingPayment(payment.stripe_payment_intent_id, teacherAccountId)
+      if (charge) await charge.provider.cancelPayment(charge.ref)
       await supabase.from('bookings').update({ status: 'rejected' } as any).eq('id', booking.id)
-      await supabase.from('payments').update({ status: 'cancelled' } as any).eq('id', payment.id)
+      if (payment) await supabase.from('payments').update({ status: 'cancelled' } as any).eq('id', payment.id)
+      if (packageId) await returnPackageLesson(packageId)
 
       const studentProfile = (booking as any).profiles
       if (studentProfile?.email) {
@@ -87,31 +91,30 @@ export async function GET(request: Request) {
   const reviewCutoff = new Date(Date.now() - ADMIN_REVIEW_TIMEOUT_HOURS * 60 * 60 * 1000).toISOString()
   const { data: unreviewed } = await supabase
     .from('bookings')
-    .select('*, teacher_profiles(stripe_account_id, profiles(full_name, email)), profiles!student_id(full_name, email)')
+    .select('*, teacher_profiles(payout_account_id, profiles(full_name, email)), profiles!student_id(full_name, email)')
     .eq('status', 'confirmed')
     .not('teacher_confirmed_at', 'is', null)
     .is('admin_confirmed_at', null)
     .lt('teacher_confirmed_at', reviewCutoff)
 
   for (const booking of unreviewed ?? []) {
-    const { data: payment } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('booking_id', booking.id)
-      .eq('status', 'succeeded')
-      .is('payout_at', null)
-      .single()
+    const packageId = booking.package_id
+    const { data: payment } = packageId
+      ? { data: null }
+      : await supabase.from('payments').select('*').eq('booking_id', booking.id).eq('status', 'succeeded').is('payout_at', null).single()
 
-    const teacherAccountId = (booking as any).teacher_profiles?.stripe_account_id
-    if (!payment?.stripe_payment_intent_id || !teacherAccountId) {
-      results.push({ bookingId: booking.id, action: 'skipped', error: 'Missing payable payment or Stripe account' })
+    const charge = paymentRefFor(payment, (booking as any).teacher_profiles)
+    if (!packageId && (!payment || !charge)) {
+      results.push({ bookingId: booking.id, action: 'skipped', error: 'Missing payable payment or payout account' })
       continue
     }
 
     try {
-      await refundBookingPayment(payment.stripe_payment_intent_id, teacherAccountId)
+      // A single lesson is refunded; a package lesson goes back to the package.
+      if (charge) await charge.provider.refundPayment(charge.ref)
       await supabase.from('bookings').update({ status: 'cancelled' } as any).eq('id', booking.id)
-      await supabase.from('payments').update({ status: 'refunded' } as any).eq('id', payment.id)
+      if (payment) await supabase.from('payments').update({ status: 'refunded' } as any).eq('id', payment.id)
+      if (packageId) await returnPackageLesson(packageId)
 
       const studentProfile = (booking as any).profiles
       const teacherContact = (booking as any).teacher_profiles?.profiles
@@ -140,6 +143,13 @@ export async function GET(request: Request) {
     } catch (err: any) {
       results.push({ bookingId: booking.id, action: 'refund_failed', error: err?.message })
     }
+  }
+
+  // Packages past their validity: unused lessons are refunded at the discounted price.
+  const { data: expired } = await supabase.from('lesson_packages').select('*').eq('status', 'active').lt('expires_at', new Date().toISOString())
+  for (const pkg of expired ?? []) {
+    const result = await closePackageWithRefund(pkg, 'expired')
+    results.push({ bookingId: pkg.id, action: 'error' in result ? 'package_refund_failed' : 'package_expired', error: 'error' in result ? result.error : undefined })
   }
 
   return NextResponse.json({ processed: results.length, results })

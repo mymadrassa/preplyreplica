@@ -4,18 +4,22 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, XCircle, Eye } from 'lucide-react'
 import { AdminTeacherDetailModal } from '@/components/AdminTeacherDetailModal'
+import type { Tier } from '@/lib/pricing'
 
 interface AdminTeacherRowActionsProps {
   teacherId: string
   name: string
   email: string | null
+  gender: string | null
   avatarUrl: string | null
   headline: string | null
   bio: string | null
   subjects: string[]
   languages: string[]
   hourlyRate: number
-  stripeChargesEnabled: boolean
+  paymentsEnabled: boolean
+  tier: Tier
+  tierLocked: boolean
   videoUrl: string | null
   documentUrls: { name: string; url: string; kind?: 'identity' | 'certificate'; reviewChange?: 'add' | 'remove' | null }[]
   status: string

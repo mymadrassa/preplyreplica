@@ -15,6 +15,7 @@ interface RankedTeacher {
   headline: string | null
   rating_avg: number
   hourly_rate: number
+  lesson_price: number
   subjects: string[]
   languages: string[]
   score: number
@@ -31,6 +32,7 @@ export function StepTeacher() {
   useEffect(() => {
     const params = new URLSearchParams()
     if (state.courses.length) params.set('courses', state.courses.join(','))
+    if (state.gender) params.set('gender', state.gender)
     if (state.weeklySlots.length) params.set('weeklySlots', JSON.stringify(state.weeklySlots))
 
     fetch(`/api/onboarding/recommend-teachers?${params.toString()}`)
@@ -92,7 +94,7 @@ export function StepTeacher() {
                   <p className="font-semibold text-slate-900">{teacher.full_name}</p>
                   <p className="mt-1 text-sm text-slate-600">{teacher.headline}</p>
                 </div>
-                <span className="font-semibold text-slate-900">£{teacher.hourly_rate}/hr</span>
+                <span className="font-semibold text-slate-900">£{teacher.lesson_price.toFixed(2)} / lesson</span>
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <RatingStars value={teacher.rating_avg} />

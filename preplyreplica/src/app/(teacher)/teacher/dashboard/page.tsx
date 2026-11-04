@@ -1,13 +1,18 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(teacher)/dashboard/page.tsx
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { AlertTriangle, CalendarDays, CalendarPlus, ClipboardCheck, PartyPopper, Star, Video, Wallet } from 'lucide-react'
+import { AlertTriangle, BookOpenCheck, CalendarDays, CalendarPlus, ClipboardCheck, PartyPopper, Star, Video, Wallet } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ApprovalTimeline, buildTeacherApprovalSteps } from '@/components/ApprovalTimeline'
 import { getTeacherReadiness } from '@/lib/teacherReadiness'
-import { StripeOnboardingSuccessBanner } from '@/components/StripeOnboardingSuccessBanner'
+import { PayoutSetupSuccessBanner } from '@/components/PayoutSetupSuccessBanner'
+import { getPaymentProvider } from '@/lib/payments'
+import { TierProgress } from '@/components/TierProgress'
+import { isTier } from '@/lib/pricing'
+import { nextTierProgress } from '@/lib/tiers'
+import { loadTeacherStats } from '@/lib/loadTeacherStats'
 import { BookingActions } from '@/components/BookingActions'
 import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
 import { dateKey } from '@/lib/availability'
@@ -15,7 +20,7 @@ import { dateKey } from '@/lib/availability'
 export default async function TeacherDashboardPage({
   searchParams,
 }: {
-  searchParams: { stripe_onboarding?: string }
+  searchParams: { payouts_setup?: string }
 }) {
   const supabase = createServerClient()
   const session = await supabase.auth.getSession()
@@ -49,9 +54,14 @@ export default async function TeacherDashboardPage({
     languages: teacher.languages,
     hourly_rate: teacher.hourly_rate,
     avatar_url: teacher.profiles?.avatar_url ?? null,
+    phone: teacher.profiles?.phone ?? null,
+    gender: teacher.profiles?.gender ?? null,
     identityDocumentCount: identityDocumentCount ?? 0,
-    stripe_charges_enabled: teacher.stripe_charges_enabled,
+    payments_enabled: teacher.payments_enabled,
   })
+
+  const tier = isTier(teacher.tier) ? teacher.tier : 'starter'
+  const tierProgress = teacher.status === 'approved' ? nextTierProgress(tier, await loadTeacherStats(supabase, teacher)) : undefined
 
   if (justApproved) {
     await supabase.from('teacher_profiles').update({ approval_seen_at: new Date().toISOString() }).eq('id', userId)
@@ -63,20 +73,20 @@ export default async function TeacherDashboardPage({
         <p className="text-sm uppercase tracking-[0.3em] text-brand-700">Teacher dashboard</p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900">Your teaching schedule</h1>
       </div>
-      {!teacher?.stripe_charges_enabled ? (
+      {!teacher?.payments_enabled ? (
         <div className="mb-8 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" aria-hidden="true" />
             <p className="text-amber-900">
-              <strong>Finish your Stripe payout setup</strong> to start accepting bookings — your profile can't be approved or receive payments until this is complete.
+              <strong>Finish your {getPaymentProvider(teacher.payment_provider).displayName} payout setup</strong> to start accepting bookings — your profile can't be approved or receive payments until this is complete.
             </p>
           </div>
           <Link href="/teacher/profile/payouts" className="whitespace-nowrap rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">
-            Complete Stripe setup
+            Complete payout setup
           </Link>
         </div>
-      ) : searchParams.stripe_onboarding === 'success' ? (
-        <StripeOnboardingSuccessBanner />
+      ) : searchParams.payouts_setup === 'success' ? (
+        <PayoutSetupSuccessBanner providerName={getPaymentProvider(teacher.payment_provider).displayName} />
       ) : null}
       {justApproved ? (
         <div className="mb-8 flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-6">
@@ -110,11 +120,15 @@ export default async function TeacherDashboardPage({
           <p className="mt-2 text-3xl font-semibold text-slate-900">{teacher?.rating_avg.toFixed(1)} / 5</p>
           <p className="text-slate-600">{teacher?.rating_count ?? 0} reviews</p>
         </Card>
-        <Card>
-          <Wallet className="h-5 w-5 text-brand-600" aria-hidden="true" />
-          <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Hourly rate</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">£{teacher?.hourly_rate}</p>
-        </Card>
+        {tierProgress !== undefined ? (
+          <TierProgress tier={tier} rate={teacher.hourly_rate} progress={tierProgress} locked={teacher.tier_locked} />
+        ) : (
+          <Card>
+            <Wallet className="h-5 w-5 text-brand-600" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Hourly rate</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">£{teacher?.hourly_rate}</p>
+          </Card>
+        )}
       </div>
       <div className="mt-10">
         <h2 className="text-2xl font-semibold text-slate-900">Next bookings</h2>
@@ -154,6 +168,11 @@ export default async function TeacherDashboardPage({
                         <CalendarPlus className="h-4 w-4" aria-hidden="true" />
                       </a>
                     </>
+                  ) : null}
+                  {booking.status === 'confirmed' || booking.status === 'completed' ? (
+                    <Link href={`/teacher/homework/${booking.id}`} title="Homework (cahier de texte)" className="text-emerald-600 hover:text-emerald-700">
+                      <BookOpenCheck className="h-4 w-4" aria-hidden="true" />
+                    </Link>
                   ) : null}
                   <BookingActions
                     compact

@@ -9,6 +9,9 @@ import { Button } from '@/components/Button'
 import { useToast } from '@/components/ToastProvider'
 import { SubmitForApprovalButton } from '@/components/SubmitForApprovalButton'
 import { TeacherDetailsForm, type TeacherDetails } from '@/components/TeacherDetailsForm'
+import { PhoneSetting } from '@/components/PhoneSetting'
+import { GENDERS } from '@/lib/gender'
+import type { Tier } from '@/lib/pricing'
 import { diffProfileChanges, type ProfileEditMode, type ReviewedValues } from '@/lib/profileEditing'
 import type { TeacherReadiness } from '@/lib/teacherReadiness'
 import type { TeacherStatus } from '@/lib/loadTeacherReadiness'
@@ -22,13 +25,18 @@ export interface ProfileWizardProps {
   mode: ProfileEditMode
   status: TeacherStatus
   details: TeacherDetails
-  stripeConnected: boolean
+  payoutsConnected: boolean
+  /** The payment provider's name, e.g. "Stripe". */
+  payoutProviderName: string
+  tier: Tier
   live: ReviewedValues
   pending: ReviewedValues | null
   changesState: 'draft' | 'submitted' | null
   reviewNote: string | null
   documents: DocumentRow[]
   readiness: TeacherReadiness
+  phone: string | null
+  gender: string | null
 }
 
 // The teacher's single Profile page. How it behaves follows the edit mode
@@ -36,7 +44,7 @@ export interface ProfileWizardProps {
 // read-mode-with-Edit once live — where edits to what students see wait in a
 // pending copy for review while the approved profile stays live.
 export function ProfileWizard(props: ProfileWizardProps) {
-  const { step, userId, mode, status, details, stripeConnected, live, pending, changesState, reviewNote, documents, readiness } = props
+  const { step, userId, mode, status, details, payoutsConnected, payoutProviderName, tier, live, pending, changesState, reviewNote, documents, readiness, phone, gender } = props
   const router = useRouter()
   const index = PROFILE_STEPS.indexOf(step)
   const go = (target: ProfileStep) => router.push(`/teacher/profile/${target}`)
@@ -45,7 +53,7 @@ export function ProfileWizard(props: ProfileWizardProps) {
   const hasChanges = changes.length > 0 || docChanges.added.length > 0 || docChanges.removed.length > 0
 
   const done: Record<ProfileStep, boolean> = {
-    details: readiness.profile,
+    details: readiness.profile && readiness.phone && readiness.gender,
     photo: readiness.photo,
     identity: readiness.identity,
     certificates: documents.some((d) => d.kind === 'certificate'),
@@ -97,7 +105,11 @@ export function ProfileWizard(props: ProfileWizardProps) {
   if (step === 'details') {
     return (
       <WizardShell {...shared} title="Your details" subtitle="What students read about you: headline, bio, subjects, languages, rate and intro video.">
-        <DetailsStep mode={mode} details={details} live={live} pending={pending} />
+        <div className="space-y-6">
+          <DetailsStep mode={mode} details={details} live={live} pending={pending} tier={tier} />
+          <PhoneSetting initial={phone} help="Required. We contact you on WhatsApp about lessons; never shown to students." />
+          {gender ? <GenderNote gender={gender} /> : null}
+        </div>
       </WizardShell>
     )
   }
@@ -135,8 +147,8 @@ export function ProfileWizard(props: ProfileWizardProps) {
 
   if (step === 'payouts') {
     return (
-      <WizardShell {...shared} title="Payouts" subtitle="Connect Stripe so you can be paid for lessons. Required before you can submit for approval.">
-        <PayoutsStep connected={stripeConnected} />
+      <WizardShell {...shared} title="Payouts" subtitle={`Connect ${payoutProviderName} so you can be paid for lessons. Required before you can submit for approval.`}>
+        <PayoutsStep connected={payoutsConnected} providerName={payoutProviderName} />
       </WizardShell>
     )
   }
@@ -312,11 +324,11 @@ function PendingBadge() {
   return <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">Pending review</span>
 }
 
-function DetailsStep({ mode, details, live, pending }: { mode: ProfileEditMode; details: TeacherDetails; live: ReviewedValues; pending: ReviewedValues | null }) {
+function DetailsStep({ mode, details, live, pending, tier }: { mode: ProfileEditMode; details: TeacherDetails; live: ReviewedValues; pending: ReviewedValues | null; tier: Tier }) {
   const router = useRouter()
   const edit = useReviewEdit(!!pending)
 
-  if (mode === 'edit') return <TeacherDetailsForm initial={details} onSaved={() => router.refresh()} />
+  if (mode === 'edit') return <TeacherDetailsForm initial={details} tier={tier} onSaved={() => router.refresh()} />
 
   // Read mode shows the version that will be live: the pending copy if there is one.
   const shown = pending ?? live
@@ -325,6 +337,7 @@ function DetailsStep({ mode, details, live, pending }: { mode: ProfileEditMode; 
     return (
       <TeacherDetailsForm
         initial={{ ...details, ...shown }}
+        tier={tier}
         onCancel={edit.stopEdit}
         onSaved={() => {
           edit.stopEdit()
@@ -405,14 +418,14 @@ function Avatar({ url }: { url: string | null }) {
   )
 }
 
-function PayoutsStep({ connected }: { connected: boolean }) {
+function PayoutsStep({ connected, providerName }: { connected: boolean; providerName: string }) {
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
 
   if (connected) {
     return (
       <p className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Stripe is connected. You can receive payouts.
+        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {providerName} is connected. You can receive payouts.
       </p>
     )
   }
@@ -423,16 +436,16 @@ function PayoutsStep({ connected }: { connected: boolean }) {
     const result = await response.json().catch(() => ({}))
     if (!response.ok || !result.onboardingUrl) {
       setLoading(false)
-      return showToast('error', result.error || 'Unable to start Stripe setup.')
+      return showToast('error', result.error || `Unable to start ${providerName} setup.`)
     }
     window.location.assign(result.onboardingUrl)
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-600">You&apos;ll be taken to Stripe to add your bank details, then brought back here.</p>
+      <p className="text-sm text-slate-600">You&apos;ll be taken to {providerName} to add your bank details, then brought back here.</p>
       <Button type="button" onClick={connect} loading={loading}>
-        Connect Stripe
+        Connect {providerName}
       </Button>
     </div>
   )
@@ -493,9 +506,11 @@ function ReviewStep({
 
   const items = [
     { label: 'Details (bio, subjects, rate)', done: readiness.profile, href: '/teacher/profile/details' },
+    { label: 'WhatsApp number', done: readiness.phone, href: '/teacher/profile/details' },
+    { label: 'Gender', done: readiness.gender, href: '/teacher/profile/details' },
     { label: 'Profile photo', done: readiness.photo, href: '/teacher/profile/photo' },
     { label: 'ID document', done: readiness.identity, href: '/teacher/profile/identity' },
-    { label: 'Payouts (Stripe)', done: readiness.payouts, href: '/teacher/profile/payouts' },
+    { label: 'Payouts', done: readiness.payouts, href: '/teacher/profile/payouts' },
   ]
 
   return (
@@ -530,4 +545,15 @@ function formatValue(field: string, value: unknown): string {
   if (field === 'avatar_url') return value ? 'Photo set' : 'No photo'
   if (field === 'video_url') return value ? String(value) : 'No video'
   return value ? String(value) : '—'
+}
+
+/** Set once (at signup or in the one-time popup); only our team can change it. */
+function GenderNote({ gender }: { gender: string }) {
+  const label = GENDERS.find((g) => g.value === gender)
+  return (
+    <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+      <span className="font-medium text-slate-900">Gender:</span> {label?.label ?? gender}. You teach {label?.value === 'male' ? 'male' : 'female'} students only.{' '}
+      <span className="text-slate-400">Contact us to change it.</span>
+    </p>
+  )
 }

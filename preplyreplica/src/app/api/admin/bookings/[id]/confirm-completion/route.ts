@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
-import { payoutToTeacherAccount } from '@/lib/stripe'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { getPaymentProvider } from '@/lib/payments'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
+  // Bookings and payments are written only by the server (see migration 0036), after the checks below.
+  const db = createSupabaseServiceRoleClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
   if (!userId) {
@@ -17,7 +19,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const { data: booking } = await supabase
     .from('bookings')
-    .select('*, teacher_profiles(stripe_account_id)')
+    .select('*, teacher_profiles(payout_account_id, payment_provider)')
     .eq('id', params.id)
     .single()
 
@@ -34,27 +36,30 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ error: 'This session was already confirmed.' }, { status: 409 })
   }
 
-  const { data: payment } = await supabase
-    .from('payments')
-    .select('*')
-    .eq('booking_id', booking.id)
-    .eq('status', 'succeeded')
-    .is('payout_at', null)
-    .single()
+  // What the teacher is owed for this lesson: its own payment, or one lesson's
+  // share of the package it was taken from (already in their payout balance).
+  const [{ data: payment }, { data: pkg }] = await Promise.all([
+    booking.package_id
+      ? Promise.resolve({ data: null })
+      : supabase.from('payments').select('*').eq('booking_id', booking.id).eq('status', 'succeeded').is('payout_at', null).single(),
+    booking.package_id ? supabase.from('lesson_packages').select('teacher_fee_per_lesson, provider').eq('id', booking.package_id).single() : Promise.resolve({ data: null }),
+  ])
 
-  const teacherAccountId = (booking as any).teacher_profiles?.stripe_account_id
-  if (!payment || !teacherAccountId) {
+  const teacher = (booking as any).teacher_profiles as { payout_account_id: string | null; payment_provider: string } | null
+  const teacherAccountId = teacher?.payout_account_id
+  const owed = payment ? { amount: payment.teacher_fee, provider: payment.provider } : pkg ? { amount: pkg.teacher_fee_per_lesson, provider: pkg.provider } : null
+  if (!owed || !teacherAccountId) {
     return NextResponse.json({ error: 'No payable payment found for this booking' }, { status: 500 })
   }
 
   try {
-    await payoutToTeacherAccount(teacherAccountId, payment.teacher_fee)
+    await getPaymentProvider(owed.provider).payout({ payeeAccountId: teacherAccountId, amount: owed.amount, currency: 'gbp' })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Payout failed' }, { status: 502 })
   }
 
-  await supabase.from('payments').update({ payout_at: new Date().toISOString() } as any).eq('id', payment.id)
-  await supabase
+  if (payment) await db.from('payments').update({ payout_at: new Date().toISOString() } as any).eq('id', payment.id)
+  await db
     .from('bookings')
     .update({ admin_confirmed_at: new Date().toISOString(), status: 'completed' } as any)
     .eq('id', booking.id)

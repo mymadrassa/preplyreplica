@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { MIN_PASSWORD_LENGTH } from '@/lib/constants'
 import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { completeSignup } from '@/lib/auth/completeSignup'
+import { normalizePhone, PHONE_HINT } from '@/lib/phone'
+import { canBeMatched } from '@/lib/gender'
 
 const weeklySlotSchema = z.object({
   weekday: z.number().int().min(0).max(6),
@@ -10,8 +13,13 @@ const weeklySlotSchema = z.object({
 })
 
 const bodySchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+  email: z.string().email('Enter a valid email address.'),
+  password: z.string().min(MIN_PASSWORD_LENGTH, `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`),
+  phone: z
+    .string()
+    .transform((value) => normalizePhone(value))
+    .refine((value): value is string => value !== null, { message: PHONE_HINT }),
+  gender: z.enum(['male', 'female'], { errorMap: () => ({ message: 'Tell us whether you are male or female.' }) }),
   courses: z.array(z.string()).min(1),
   immediateAvailability: z.enum(['now', 'this_week', 'flexible']),
   weeklySlots: z.array(weeklySlotSchema),
@@ -29,9 +37,9 @@ export async function POST(request: Request) {
   const body = await request.json()
   const parseResult = bodySchema.safeParse(body)
   if (!parseResult.success) {
-    return NextResponse.json({ error: parseResult.error.message }, { status: 400 })
+    return NextResponse.json({ error: parseResult.error.issues[0]?.message ?? 'Invalid details.' }, { status: 400 })
   }
-  const { email, password, courses, immediateAvailability, weeklySlots, rhythm, packageSize, selectedTeacherId } = parseResult.data
+  const { email, password, phone, gender, courses, immediateAvailability, weeklySlots, rhythm, packageSize } = parseResult.data
 
   const supabase = createServerClient()
   // This project requires email confirmation, so signUp() returns no session
@@ -40,13 +48,21 @@ export async function POST(request: Request) {
   // they go through the service-role client rather than the RLS-bound
   // session client.
   const serviceClient = createSupabaseServiceRoleClient()
+  // A teacher picked in the wizard is only kept if they teach this student's gender.
+  const requestedTeacherId = parseResult.data.selectedTeacherId
+  const { data: pickedTeacher } = requestedTeacherId
+    ? await serviceClient.from('profiles').select('gender').eq('id', requestedTeacherId).maybeSingle()
+    : { data: null }
+  const selectedTeacherId = requestedTeacherId && canBeMatched(gender, pickedTeacher?.gender) ? requestedTeacherId : null
   const signupResult = await completeSignup(
     supabase,
     {
       email,
       password,
       role: 'student',
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      phone,
+      gender,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?type=email`,
     },
     serviceClient
   )

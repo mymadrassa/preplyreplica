@@ -1,15 +1,31 @@
-import { Resend } from 'resend'
+import nodemailer, { type Transporter } from 'nodemailer'
 
-const FROM = process.env.EMAIL_FROM || 'Preply Clone <onboarding@resend.dev>'
+// Every email the app sends goes through the IONOS mailbox (SMTP), the same
+// one Supabase uses for signup confirmations:
+//   SMTP_HOST=smtp.ionos.co.uk  SMTP_PORT=465
+//   SMTP_USER=support@mymadrassa.com  SMTP_PASSWORD=…
+//   EMAIL_FROM="My Madrassa <support@mymadrassa.com>"
+const FROM = process.env.EMAIL_FROM || `My Madrassa <${process.env.SMTP_USER}>`
+
+let transporter: Transporter | null = null
+function smtp(): Transporter {
+  const port = Number(process.env.SMTP_PORT || 465)
+  transporter ??= nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.ionos.co.uk',
+    port,
+    // 465 is TLS from the start; 587 upgrades with STARTTLS.
+    secure: port === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+  })
+  return transporter
+}
 
 async function sendEmail(to: string | string[], subject: string, html: string) {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY not set — skipping email to', to)
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+    console.warn('SMTP_USER / SMTP_PASSWORD not set — skipping email to', to)
     return
   }
-
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  await resend.emails.send({ from: FROM, to, subject, html })
+  await smtp().sendMail({ from: FROM, to, subject, html })
 }
 
 function formatDateTime(iso: string) {
@@ -252,6 +268,124 @@ export async function sendAwaitingAdminReviewEmail({
       <p>${teacherName} marked their <strong>${subject}</strong> lesson with ${studentName} (${formatDateTime(startAt)}) as complete.</p>
       <p>The teacher's payout is on hold until an admin confirms the session took place.</p>
       <p><a href="${reviewUrl}">Review and confirm</a></p>
+    `
+  )
+}
+
+function escapeHtml(text: string) {
+  return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+}
+
+/** The cahier de texte entry for one lesson, sent by email (directly, or when WhatsApp can't reach the student). */
+export async function sendHomeworkEmail({
+  to,
+  studentName,
+  teacherName,
+  lessonDate,
+  revision,
+  memorization,
+  note,
+  homeworkUrl,
+  updated,
+}: {
+  to: string
+  studentName: string
+  teacherName: string
+  lessonDate: string
+  revision: string
+  memorization: string
+  note: string
+  homeworkUrl: string
+  updated: boolean
+}) {
+  await sendEmail(
+    to,
+    `${updated ? 'Updated homework' : 'Your homework'} from ${teacherName}`,
+    `
+      <p>Assalamu alaykum ${escapeHtml(studentName)},</p>
+      <p>${updated ? 'Your homework has been updated' : 'Here is your homework'} from your lesson with ${escapeHtml(teacherName)} on <strong>${escapeHtml(lessonDate)}</strong>.</p>
+      <p><strong>Revision:</strong> ${escapeHtml(revision)}<br/><strong>New memorisation:</strong> ${escapeHtml(memorization)}</p>
+      ${note && note !== '—' ? `<p><strong>Note from your teacher:</strong> ${escapeHtml(note)}</p>` : ''}
+      <p><a href="${homeworkUrl}">Open your cahier de texte</a></p>
+    `
+  )
+}
+
+/** A 10-lesson package was paid: to the student (how to book) and to the teacher (who bought it). */
+export async function sendPackagePurchasedEmails({
+  student,
+  teacher,
+  lessons,
+  price,
+  expiresAt,
+  bookUrl,
+}: {
+  student: { email: string | null; name: string }
+  teacher: { email: string | null; name: string }
+  lessons: number
+  /** Pounds. */
+  price: number
+  expiresAt: string
+  bookUrl: string
+}) {
+  const until = new Date(expiresAt).toLocaleDateString('en-GB', { dateStyle: 'long' })
+  if (student.email) {
+    await sendEmail(
+      student.email,
+      `Your ${lessons}-lesson package with ${teacher.name}`,
+      `
+        <p>Assalamu alaykum ${escapeHtml(student.name)},</p>
+        <p>Your package of <strong>${lessons} lessons</strong> with ${escapeHtml(teacher.name)} is ready (£${price.toFixed(2)}). Use your lessons by <strong>${until}</strong>; any you haven't used by then are refunded automatically.</p>
+        <p><a href="${bookUrl}">Book your next lesson</a></p>
+      `
+    )
+  }
+  if (teacher.email) {
+    await sendEmail(
+      teacher.email,
+      `${student.name} bought ${lessons} lessons with you`,
+      `
+        <p>Hi ${escapeHtml(teacher.name)},</p>
+        <p>${escapeHtml(student.name)} bought a package of <strong>${lessons} lessons</strong> with you. You're paid for each lesson once it's completed.</p>
+      `
+    )
+  }
+}
+
+/** Unused package lessons were refunded (the student cancelled, or the package expired). */
+export async function sendPackageRefundedEmail({ to, studentName, teacherName, lessons, amount, reason }: { to: string; studentName: string; teacherName: string; lessons: number; amount: number; reason: 'cancelled' | 'expired' }) {
+  await sendEmail(
+    to,
+    `Refund for ${lessons} unused lesson${lessons === 1 ? '' : 's'}`,
+    `
+      <p>Assalamu alaykum ${escapeHtml(studentName)},</p>
+      <p>${reason === 'expired' ? 'Your package' : 'You cancelled your package'} with ${escapeHtml(teacherName)}${reason === 'expired' ? ' has expired' : ''}. We've refunded <strong>£${amount.toFixed(2)}</strong> for ${lessons} unused lesson${lessons === 1 ? '' : 's'}. It can take a few days to reach your card.</p>
+    `
+  )
+}
+
+/** The daily tier review promoted a teacher. */
+export async function sendTierPromotionEmail({ to, teacherName, tierLabel, commissionPercent }: { to: string; teacherName: string; tierLabel: string; commissionPercent: number }) {
+  await sendEmail(
+    to,
+    `You've reached ${tierLabel}!`,
+    `
+      <p>Congratulations ${escapeHtml(teacherName)},</p>
+      <p>You've reached the <strong>${tierLabel}</strong> tier. Our commission on your lessons is now <strong>${commissionPercent}%</strong>, so students pay less for your lessons while you still receive your full rate.</p>
+    `
+  )
+}
+
+/** The password reset link, sent by the app itself (see /api/auth/forgot-password). */
+export async function sendPasswordResetEmail({ to, resetUrl }: { to: string; resetUrl: string }) {
+  await sendEmail(
+    to,
+    'Reset your password',
+    `
+      <p>Assalamu alaykum,</p>
+      <p>We received a request to reset the password for your account. Click the button below to choose a new one. The link works once and expires in 1 hour.</p>
+      <p><a href="${resetUrl}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none;font-weight:600">Choose a new password</a></p>
+      <p style="color:#64748b;font-size:13px">If you didn't ask for this, you can ignore this email: your password stays the same.</p>
     `
   )
 }

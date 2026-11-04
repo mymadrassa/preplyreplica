@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { canDeleteAnnotation } from '../annotations'
 import { authorLabel, capabilitiesFor, type MushafRole } from '../permissions'
 import type { MushafScript } from '../script'
@@ -38,6 +38,15 @@ interface MushafViewerProps {
   lessons?: MushafLesson[]
   /** Surfaces failures (e.g. through the host app's toast system). */
   onError?: (message: string) => void
+  /** Opens on this page as a private view (e.g. a homework link) instead of the shared page. */
+  openAtPage?: number | null
+  /**
+   * Host content shown in the side column above the summary cards (e.g. homework).
+   * When given, the column shows even without marks; `onHide` is then set so the
+   * content can offer the hide button the summary would otherwise carry. `goToPage`
+   * moves the shared page for whoever controls it, otherwise only this viewer's page.
+   */
+  sidePanelTop?: (controls: { onHide: (() => void) | null; goToPage: (page: number) => void }) => ReactNode
 }
 
 type MarkFilter = 'all' | 'teacher'
@@ -61,11 +70,12 @@ interface Selection {
   committed: boolean
 }
 
-export function MushafViewer({ supabase, role, sessionId, teacherId, currentUserId, initialPage, bookingId = null, lessons = [], onError }: MushafViewerProps) {
+export function MushafViewer({ supabase, role, sessionId, teacherId, currentUserId, initialPage, bookingId = null, lessons = [], onError, openAtPage = null, sidePanelTop }: MushafViewerProps) {
   const sync = useMushafSync({ supabase, sessionId, currentUserId, initialPage, bookingId })
   // A student can look elsewhere (e.g. via the surah search) without moving the teacher's page;
   // `detachedPage` is that private view, and null means following the shared page.
-  const [detachedPage, setDetachedPage] = useState<number | null>(null)
+  // Only for someone who can't move the shared page; the teacher's view always is the shared page.
+  const [detachedPage, setDetachedPage] = useState<number | null>(capabilitiesFor(role).controlsSharedPage ? null : openAtPage)
   const viewPage = detachedPage ?? sync.currentPage
   const [script, setScript] = useState<MushafScript>('madinah')
   const { page, loading: pageLoading } = useMushafPage(viewPage, script)
@@ -181,7 +191,8 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection])
   const pending = !!selection && !selection.committed
-  const showPanel = hasMarks && panelOpen && !!page
+  const hasPanel = hasMarks || !!sidePanelTop
+  const showPanel = hasPanel && panelOpen && !!page
 
   // Hiding the summary yourself slides the column shut so the page grows back smoothly;
   // everything else (deleting the last card, switching pages) changes the layout at once.
@@ -204,6 +215,13 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
       // ignore: the width still applies for this visit
     }
   }
+  // The teacher moves the shared page; anyone else only changes their own view.
+  function goToPage(target: number) {
+    clearSelection()
+    if (can.controlsSharedPage) sync.setPage(target)
+    else setDetachedPage(target)
+  }
+
   function hideSummary() {
     setSummaryClosing(true)
     window.setTimeout(() => {
@@ -249,7 +267,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        {hasMarks && !panelOpen ? (
+        {hasPanel && !panelOpen ? (
           <button
             type="button"
             title="Show summary"
@@ -291,14 +309,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
               <Icon name="link" />
             </button>
           ) : null}
-          <SurahSearch
-            onSelect={(startPage) => {
-              clearSelection()
-              // The teacher moves the shared page; anyone else only changes their own view.
-              if (can.controlsSharedPage) sync.setPage(startPage)
-              else setDetachedPage(startPage)
-            }}
-          />
+          <SurahSearch onSelect={goToPage} />
           <ScriptSelect script={script} onChange={setScript} />
           <ThemeToggle dark={dark} onChange={setDark} />
           <HintTooltip active={pending}>
@@ -336,18 +347,25 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
                 onResizeEnd={rememberSummaryWidth}
               />
             ) : null}
-            <div style={summaryClosing ? { width: summaryWidth } : undefined}>
-              <MarksSummary
-                pageNumber={viewPage}
-                blocks={blocks}
-                verseNotes={verseNotes}
-                selectedWordIds={selectedIds}
-                authorLabel={nameOf}
-                currentUserId={currentUserId}
-                onDelete={handleDeleteMany}
-                onFocusBlock={focusBlock}
-                onClose={hideSummary}
-              />
+            <div className="flex max-h-[calc(100vh-7rem)] flex-col gap-3" style={summaryClosing ? { width: summaryWidth } : undefined}>
+              {sidePanelTop ? (
+                <div data-mushaf-keep className={`min-h-0 flex-shrink-0 overflow-y-auto overscroll-contain ${hasMarks ? 'max-h-[45%]' : ''}`}>
+                  {sidePanelTop({ onHide: hasMarks ? null : hideSummary, goToPage })}
+                </div>
+              ) : null}
+              {hasMarks ? (
+                <MarksSummary
+                  pageNumber={viewPage}
+                  blocks={blocks}
+                  verseNotes={verseNotes}
+                  selectedWordIds={selectedIds}
+                  authorLabel={nameOf}
+                  currentUserId={currentUserId}
+                  onDelete={handleDeleteMany}
+                  onFocusBlock={focusBlock}
+                  onClose={hideSummary}
+                />
+              ) : null}
             </div>
           </div>
         ) : null}

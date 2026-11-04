@@ -9,7 +9,7 @@ const colorMap: Record<string, string> = {
   rejected: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200',
   cancelled: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200',
   suspended: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200',
-  // Payment statuses (src/lib/stripe.ts / webhook handler) — distinct from
+  // Payment statuses (src/lib/payments/handleEvent.ts) — distinct from
   // the booking/teacher statuses above, sharing this same badge component.
   succeeded: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200',
   authorized: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',

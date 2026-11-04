@@ -51,7 +51,7 @@ export function JitsiSessionRoom({ bookingId, roomName, role, displayName, other
 
     if (role === 'teacher') {
       const sessionEnded = Date.now() >= new Date(endAt).getTime()
-      const goToDashboard = () => router.push('/teacher/dashboard')
+      const goToDashboard = () => router.push(`/teacher/dashboard?feedback=${bookingId}`)
       if (sessionEnded) {
         // Best-effort: mark the session complete on the way out. A 409 just
         // means it's already marked (or a rare timing edge case) — either
@@ -61,7 +61,7 @@ export function JitsiSessionRoom({ bookingId, roomName, role, displayName, other
         goToDashboard()
       }
     } else {
-      router.push('/student/bookings')
+      router.push(`/student/bookings?feedback=${bookingId}`)
     }
   }
 

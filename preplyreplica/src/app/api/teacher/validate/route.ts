@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     }
     const { readiness } = loaded
     if (!readiness.payouts) {
-      return NextResponse.json({ error: "This teacher hasn't finished setting up Stripe payouts yet, so they can't be approved." }, { status: 409 })
+      return NextResponse.json({ error: "This teacher hasn't finished setting up payouts yet, so they can't be approved." }, { status: 409 })
     }
     if (!readiness.identity) {
       return NextResponse.json({ error: "This teacher hasn't uploaded an ID document yet." }, { status: 409 })
@@ -76,6 +76,10 @@ export async function POST(request: Request) {
     .eq('id', parseResult.data.teacherId)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  // The first approval starts the clock for tier promotions ("3 months on the platform").
+  if (status === 'approved') {
+    await supabase.from('teacher_profiles').update({ approved_at: new Date().toISOString() }).eq('id', parseResult.data.teacherId).is('approved_at', null)
   }
   revalidateTag(TEACHER_CATALOGUE_TAG)
 

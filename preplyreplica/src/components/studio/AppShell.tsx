@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronsLeft, ChevronsRight, Loader2, Menu, X, LayoutDashboard, BookOpen, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, type LucideIcon } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, Loader2, Menu, X, LayoutDashboard, BookOpen, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, NotebookPen, Users, type LucideIcon } from 'lucide-react'
 import { AccountMenu } from '@/components/AccountMenu'
 import { NotificationBell, type AppNotification } from '@/components/NotificationBell'
+import { SessionFeedbackPrompt } from '@/components/SessionFeedbackPrompt'
+import { GenderGate } from '@/components/GenderGate'
+import type { FeedbackPromptData } from '@/lib/sessionFeedback'
 
 interface StudioNavItem {
   href: string
@@ -24,13 +27,16 @@ const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
   student: [
     { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/student/mushaf', label: 'My Mushaf', icon: BookOpen, exact: true },
+    { href: '/student/homework', label: 'Cahier de texte', icon: NotebookPen },
     { href: '/student/bookings', label: 'My bookings', icon: CalendarCheck },
     { href: '/student/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teachers', label: 'Find a teacher', icon: Search },
+    { href: '/student/profile', label: 'Profile', icon: UserCircle },
   ],
   teacher: [
     { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/teacher/mushaf', label: 'My Mushaf', icon: BookOpen, exact: true },
+    { href: '/teacher/students', label: 'My students', icon: Users },
     { href: '/teacher/availability', label: 'Availability', icon: CalendarCheck },
     { href: '/teacher/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teacher/earnings', label: 'Earnings', icon: Wallet },
@@ -46,6 +52,12 @@ interface AppShellProps {
   avatarUrl: string | null
   /** When given, a bell in the top bar lists these (e.g. what a teacher still has to finish). */
   notifications?: AppNotification[]
+  /** Title of the bell's list; defaults to the teacher pre-approval wording. */
+  notificationsHeading?: string
+  /** Post-lesson feedback still owed, shown as a popup on whatever page is open. */
+  feedbackPrompt?: FeedbackPromptData | null
+  /** The account has no gender yet: ask before anything else (blocking). */
+  needsGender?: boolean
   children: React.ReactNode
 }
 
@@ -106,7 +118,7 @@ function SidebarLinks({ navItems, pathname, collapsed, pendingHref, onNavigate }
 }
 
 /** YouTube-Studio-style shell: collapsible left sidebar + slim top bar, used by the student/teacher/admin route groups. Page content renders unchanged inside the content area. */
-export function AppShell({ role, dashboardHref, userName, avatarUrl, notifications, children }: AppShellProps) {
+export function AppShell({ role, dashboardHref, userName, avatarUrl, notifications, notificationsHeading, feedbackPrompt = null, needsGender = false, children }: AppShellProps) {
   const pathname = usePathname()
   const navItems = NAV_ITEMS_BY_ROLE[role]
   const [collapsed, setCollapsed] = useState(false)
@@ -155,7 +167,7 @@ export function AppShell({ role, dashboardHref, userName, avatarUrl, notificatio
           <span className="hidden sm:inline">Preply Clone</span>
         </Link>
         <div className="ml-auto flex items-center gap-3">
-          {notifications ? <NotificationBell notifications={notifications} /> : null}
+          {notifications ? <NotificationBell notifications={notifications} heading={notificationsHeading} /> : null}
           <AccountMenu dashboardHref={dashboardHref} userName={userName} avatarUrl={avatarUrl} showDashboardLink={false} />
         </div>
       </header>
@@ -190,6 +202,13 @@ export function AppShell({ role, dashboardHref, userName, avatarUrl, notificatio
         ) : null}
 
         <main className="min-w-0 flex-1">{children}</main>
+        {needsGender && role !== 'admin' ? <GenderGate role={role} /> : null}
+        {role !== 'admin' && !needsGender ? (
+          // Reads ?feedback= (set after hanging up a call), which needs a Suspense boundary.
+          <Suspense fallback={null}>
+            <SessionFeedbackPrompt initial={feedbackPrompt} />
+          </Suspense>
+        ) : null}
       </div>
     </div>
   )

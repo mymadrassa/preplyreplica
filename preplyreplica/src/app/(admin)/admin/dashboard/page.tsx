@@ -14,7 +14,7 @@ import { AdminPayoutConfirmCard } from '@/components/AdminPayoutConfirmCard'
 import { EarningsTrendChart } from '@/components/EarningsTrendChart'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatBookingDateTime } from '@/lib/format'
-import { toPounds } from '@/lib/pricing'
+import { isTier, toPounds } from '@/lib/pricing'
 
 type PaymentRow = Database['public']['Tables']['payments']['Row']
 type TeacherDocument = Database['public']['Tables']['teacher_documents']['Row']
@@ -180,13 +180,16 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         id: teacher.id,
         name: teacher.profiles?.full_name || teacher.profiles?.email || 'Teacher',
         email: teacher.profiles?.email ?? null,
+        gender: teacher.profiles?.gender ?? null,
         avatarUrl: teacher.profiles?.avatar_url ?? null,
         headline: teacher.headline,
         bio: teacher.bio,
         subjects: teacher.subjects ?? [],
         languages: teacher.languages ?? [],
         hourlyRate: teacher.hourly_rate,
-        stripeChargesEnabled: teacher.stripe_charges_enabled,
+        paymentsEnabled: teacher.payments_enabled,
+        tier: isTier(teacher.tier) ? teacher.tier : 'starter',
+        tierLocked: teacher.tier_locked,
         videoUrl: teacher.video_url,
         documentUrls,
         status: teacher.status,

@@ -1,57 +1,58 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerClient } from '@/lib/supabase/server'
-import { createBookingCheckoutSession } from '@/lib/stripe'
-import { calculatePricing, toPence } from '@/lib/pricing'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { getPaymentProvider } from '@/lib/payments'
+import { LESSON_MINUTES, TRIAL, toPence, trialPrice } from '@/lib/pricing'
 import { isRangeFree } from '@/lib/availability'
 import { MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
+import { emailTeacherNewRequest, loadBookableTeacher } from '@/lib/bookable'
+import { PACKAGE_REQUIRED_MESSAGE } from '@/lib/trialRule'
 
-const bookingSchema = z.object({
-  teacherId: z.string().uuid(),
-  subject: z.string().min(3),
-  language: z.string().min(2),
-  duration: z.number().int().refine((value) => [30, 45, 60, 90].includes(value)),
-  startAt: z.string().datetime(),
-  isTrial: z.boolean().optional().default(false),
-})
+// Strict: unknown fields are rejected rather than ignored.
+const bookingSchema = z
+  .object({
+    teacherId: z.string().uuid(),
+    subject: z.string().min(3),
+    language: z.string().min(2),
+    startAt: z.string().datetime(),
+    /** A lesson from this package (no payment). Without it, the request is for the trial. */
+    packageId: z.string().uuid().optional(),
+  })
+  .strict()
 
+/**
+ * Books one of the only two kinds of lesson there are: the 20-minute trial
+ * (the first lesson with a teacher, paid at checkout), or a one-hour lesson
+ * from the student's package with this teacher (no payment). There is no
+ * single paid one-hour lesson.
+ */
 export async function POST(request: Request) {
   const supabase = createServerClient()
+  // Bookings and payments are written only by the server (see migration 0036), after the checks below.
+  const db = createSupabaseServiceRoleClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await request.json()
-  const parseResult = bookingSchema.safeParse(body)
+  const parseResult = bookingSchema.safeParse(await request.json())
   if (!parseResult.success) {
     return NextResponse.json({ error: parseResult.error.message }, { status: 400 })
   }
+  const { teacherId, subject, language, startAt, packageId } = parseResult.data
+  const isTrial = !packageId
 
-  const { teacherId, subject, language, duration, startAt, isTrial } = parseResult.data
-
-  const { data: teacher } = await supabase.from('teacher_profiles').select('*').eq('id', teacherId).single()
-  if (!teacher || teacher.status !== 'approved') {
-    return NextResponse.json({ error: 'Teacher is not available for booking' }, { status: 400 })
-  }
-  if (!teacher.stripe_charges_enabled || !teacher.stripe_account_id) {
-    // stripe_account_id is set as soon as Stripe onboarding *starts* (see
-    // /api/teacher/onboard), not once it's actually complete — only
-    // stripe_charges_enabled (synced from Stripe's account.updated webhook)
-    // confirms the account can really accept a charge. Checking both here
-    // (rather than just stripe_charges_enabled) also narrows stripe_account_id
-    // to non-null for the rest of this function.
-    return NextResponse.json({ error: "This teacher hasn't finished setting up payments yet and can't accept bookings right now." }, { status: 400 })
-  }
+  const bookable = await loadBookableTeacher(supabase, userId, teacherId)
+  if ('error' in bookable) return NextResponse.json({ error: bookable.error }, { status: bookable.status })
+  const { teacher } = bookable
 
   if (isTrial) {
-    // A trial is only for first contact with this teacher — re-validated
-    // here rather than trusting the client, since the eligibility banner in
-    // BookingForm is only a UI hint. Any non-cancelled/rejected booking
-    // (trial or normal) with this teacher already disqualifies them; the
-    // partial unique index on bookings also guards the race between two
-    // concurrent trial requests.
+    // The trial is only for first contact with this teacher — re-validated
+    // here rather than trusting the client. Any non-cancelled/rejected
+    // booking with this teacher (including an unpaid checkout in progress)
+    // means the next lessons come from a package; the partial unique index
+    // on bookings also guards the race between two concurrent trial requests.
     const { data: existingBooking } = await supabase
       .from('bookings')
       .select('id')
@@ -61,13 +62,11 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle()
     if (existingBooking) {
-      return NextResponse.json({ error: "You've already had a session with this teacher, so a free trial isn't available." }, { status: 409 })
+      return NextResponse.json({ error: PACKAGE_REQUIRED_MESSAGE }, { status: 409 })
     }
   }
 
-  const { data: studentProfile } = await supabase.from('profiles').select('pending_stripe_fees').eq('id', userId).single()
-  const pendingFeesOwed = Number((studentProfile as { pending_stripe_fees: number } | null)?.pending_stripe_fees ?? 0)
-
+  const duration = isTrial ? TRIAL.minutes : LESSON_MINUTES
   const startDate = new Date(startAt)
   const endDate = new Date(startDate.getTime() + duration * 60000)
 
@@ -109,73 +108,113 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'That time is no longer available. Please pick another slot.' }, { status: 409 })
   }
 
-  // Teacher always nets their full base rate. The commission funds the
-  // platform's cut; Stripe's real processing fee (deducted automatically
-  // from the teacher's connected-account balance under direct charges) is
-  // covered by reducing the application fee accordingly, and recouped from
-  // the student later rather than split per-transaction — see lib/pricing.ts.
-  const pricing = calculatePricing(teacher.hourly_rate, duration / 60, isTrial)
-  // 30p is Stripe's own minimum charge for GBP (below it, Stripe's own fee
-  // could exceed the charge) -- not a business-chosen floor, so it's the
-  // lowest this can safely go without Stripe rejecting the payment outright.
-  const amount = Math.max(30, toPence(pricing.totalStudentPays) + toPence(pendingFeesOwed))
-  const teacherFee = toPence(pricing.teacherReceives)
-  const commissionAfterFee = Math.max(0, toPence(pricing.platformCommission) - toPence(pricing.estimatedStripeFee))
-  const applicationFeeAmount = commissionAfterFee + toPence(pendingFeesOwed)
-  const platformFee = applicationFeeAmount
+  const lesson = { student_id: userId, teacher_id: teacherId, subject, language, duration, start_at: startDate.toISOString(), end_at: endDate.toISOString() }
 
-  const { data: booking, error: bookingError } = await supabase.from('bookings').insert({
-    student_id: userId,
-    teacher_id: teacherId,
-    subject,
-    language,
-    duration,
-    start_at: startDate.toISOString(),
-    end_at: endDate.toISOString(),
-    // Holds the slot the instant checkout starts — this status (plus
-    // 'pending' and 'confirmed') is what future availability checks treat
-    // as occupied, so a second student can't book the same slot while this
-    // one is mid-checkout. Moves to 'pending' once payment is authorized
-    // (see the webhook), then 'confirmed' once the teacher approves.
-    status: 'pending_payment',
-    is_trial: isTrial,
-  }).select().single()
+  if (packageId) return bookWithPackage(userId, teacherId, packageId, lesson)
+
+  // From here on: the trial, the only lesson paid on its own. The student pays
+  // into the teacher's payout account, on whichever provider holds it; the
+  // teacher keeps exactly the trial fee and the platform's share is the
+  // booking fee less the card processing fee (lib/pricing.ts).
+  const provider = getPaymentProvider(teacher.payment_provider)
+  const pricing = trialPrice(provider.fees)
+  const amount = toPence(pricing.studentPays)
+  const platformFee = Math.max(0, toPence(pricing.platformNet))
+
+  const { data: booking, error: bookingError } = await db
+    .from('bookings')
+    .insert({
+      ...lesson,
+      // Holds the slot the instant checkout starts — this status (plus
+      // 'pending' and 'confirmed') is what future availability checks treat
+      // as occupied, so a second student can't book the same slot while this
+      // one is mid-checkout. Moves to 'pending' once payment is authorized
+      // (see the webhook), then 'confirmed' once the teacher approves.
+      status: 'pending_payment',
+      is_trial: true,
+    })
+    .select()
+    .single()
 
   if (bookingError || !booking) {
     return NextResponse.json({ error: bookingError?.message || 'Booking creation failed' }, { status: 500 })
   }
 
-  const { url, sessionId, paymentIntent } = await createBookingCheckoutSession({
+  const { url, checkoutId, paymentId } = await provider.createCheckout({
     amount,
-    applicationFeeAmount,
-    teacherAccountId: teacher.stripe_account_id,
-    bookingId: booking.id,
+    platformFee,
+    currency: 'gbp',
+    payeeAccountId: teacher.payout_account_id,
+    capture: 'manual',
+    description: `${TRIAL.minutes}-minute trial lesson`,
+    reference: booking.id,
     successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/bookings`,
     cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL}/teachers/${teacherId}`,
   })
 
-  const { error: paymentError } = await supabase.from('payments').insert({
+  const { error: paymentError } = await db.from('payments').insert({
     booking_id: booking.id,
-    stripe_checkout_session_id: sessionId,
-    stripe_payment_intent_id: paymentIntent,
+    provider: provider.id,
+    provider_checkout_id: checkoutId,
+    provider_payment_id: paymentId,
     amount,
     currency: 'gbp',
     platform_fee: platformFee,
-    teacher_fee: teacherFee,
-    stripe_fee_estimate: pricing.estimatedStripeFee,
-    pending_fees_billed: pendingFeesOwed,
+    teacher_fee: toPence(pricing.teacherReceives),
+    processing_fee_estimate: pricing.processingFee,
+    pending_fees_billed: 0,
     status: 'pending',
   })
 
   if (paymentError) {
-    // Without this row, the Stripe webhook has nothing to match the
-    // checkout session back to — the booking would silently sit at
+    // Without this row, the payment webhook has nothing to match the
+    // checkout back to — the booking would silently sit at
     // 'pending_payment' forever even if the student successfully pays. Roll
     // back the slot hold and fail loudly instead of sending them to a
     // checkout that can never be reconciled.
-    await supabase.from('bookings').update({ status: 'cancelled' } as any).eq('id', booking.id)
+    await db.from('bookings').update({ status: 'cancelled' } as any).eq('id', booking.id)
     return NextResponse.json({ error: paymentError.message || 'Unable to create payment record for this booking' }, { status: 500 })
   }
 
   return NextResponse.json({ checkoutUrl: url })
+}
+
+/**
+ * A lesson paid with a package credit: no checkout, it goes straight to the
+ * teacher for approval. The credit is taken atomically first and given back
+ * if the booking can't be created (or later, if it's declined or cancelled).
+ */
+async function bookWithPackage(
+  studentId: string,
+  teacherId: string,
+  packageId: string,
+  lesson: { student_id: string; teacher_id: string; subject: string; language: string; duration: number; start_at: string; end_at: string }
+) {
+  const service = createSupabaseServiceRoleClient()
+  const { data: pkg } = await service.from('lesson_packages').select('student_id, teacher_id, expires_at').eq('id', packageId).maybeSingle()
+  if (!pkg || pkg.student_id !== studentId || pkg.teacher_id !== teacherId) {
+    return NextResponse.json({ error: 'Package not found.' }, { status: 404 })
+  }
+  // A lesson must happen while the package is still valid.
+  if (pkg.expires_at && new Date(lesson.end_at) > new Date(pkg.expires_at)) {
+    return NextResponse.json({ error: 'Your package expires before this lesson. Pick an earlier time.' }, { status: 409 })
+  }
+
+  const { data: taken } = await service.rpc('use_package_lesson', { package: packageId, delta: 1 })
+  if (!taken) {
+    return NextResponse.json({ error: 'No lessons left in this package.' }, { status: 409 })
+  }
+
+  const { data: booking, error } = await service
+    .from('bookings')
+    .insert({ ...lesson, status: 'pending', is_trial: false, package_id: packageId })
+    .select('id')
+    .single()
+  if (error || !booking) {
+    await service.rpc('use_package_lesson', { package: packageId, delta: -1 })
+    return NextResponse.json({ error: error?.message || 'Booking creation failed' }, { status: 500 })
+  }
+
+  await emailTeacherNewRequest(booking.id)
+  return NextResponse.json({ bookingId: booking.id, paidWithPackage: true })
 }

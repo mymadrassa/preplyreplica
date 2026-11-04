@@ -1,66 +1,46 @@
 import { describe, expect, it } from 'vitest'
-import { calculatePricing, toPence, toPounds } from '../pricing'
+import { lessonPrice, packagePrice, toPence, toPounds, trialPrice } from '../pricing'
 
-describe('calculatePricing', () => {
-  it('charges the student base + 40% commission', () => {
-    const pricing = calculatePricing(20, 1)
-    expect(pricing.baseAmount).toBe(20)
-    expect(pricing.platformCommission).toBe(8)
-    expect(pricing.totalStudentPays).toBe(28)
+// Every expectation below is a figure from Pricing_Model_GBP.pdf.
+
+describe('lessonPrice', () => {
+  it.each([
+    ['starter', 15, { commission: 6, studentPays: 23, processingFee: 0.55, platformNet: 7.45 }],
+    ['mid', 17.5, { commission: 6.13, studentPays: 25.63, processingFee: 0.58, platformNet: 7.55 }],
+    ['top', 20, { commission: 6, studentPays: 28, processingFee: 0.62, platformNet: 7.38 }],
+  ] as const)('prices a one-hour %s lesson', (tier, rate, expected) => {
+    const price = lessonPrice(rate, tier)
+    expect(price).toMatchObject({ teacherReceives: rate, bookingFee: 2, ...expected })
   })
 
-  it('always pays the teacher their full base rate, never reduced by fees', () => {
-    const pricing = calculatePricing(20, 1)
-    expect(pricing.teacherReceives).toBe(pricing.baseAmount)
-    expect(pricing.teacherReceives).toBe(20)
+  it('always pays the teacher their full rate', () => {
+    expect(lessonPrice(12, 'starter').teacherReceives).toBe(12)
+  })
+})
+
+describe('trialPrice', () => {
+  it('is the same fixed price for every teacher', () => {
+    expect(trialPrice()).toEqual({ teacherReceives: 5, commission: 0, bookingFee: 0.3, studentPays: 5.3, processingFee: 0.28, platformNet: 0.02 })
+  })
+})
+
+describe('packagePrice', () => {
+  it.each([
+    ['starter', 15, { normalPrice: 230, price: 207, processingFee: 3.31, platformNet: 53.69 }],
+    ['mid', 17.5, { normalPrice: 256.25, price: 230.63, processingFee: 3.66, platformNet: 51.97 }],
+    ['top', 20, { normalPrice: 280, price: 252, processingFee: 3.98, platformNet: 48.02 }],
+  ] as const)('prices a 10-lesson %s package at 10%% off', (tier, rate, expected) => {
+    expect(packagePrice(rate, tier)).toMatchObject({ lessons: 10, teacherPerLesson: rate, ...expected })
   })
 
-  it('scales the base amount by fractional lesson duration', () => {
-    const pricing = calculatePricing(25, 0.5)
-    expect(pricing.baseAmount).toBe(12.5)
-    expect(pricing.platformCommission).toBe(5)
-    expect(pricing.totalStudentPays).toBe(17.5)
-  })
-
-  it('estimates the Stripe fee as 1.5% of the total charge plus a fixed 20p', () => {
-    const pricing = calculatePricing(20, 1)
-    // totalStudentPays = 28 -> 28 * 0.015 + 0.20 = 0.62
-    expect(pricing.estimatedStripeFee).toBeCloseTo(0.62, 2)
-  })
-
-  it('rounds all monetary values to 2 decimal places', () => {
-    const pricing = calculatePricing(19.99, 1 / 3)
-    for (const value of [pricing.baseAmount, pricing.platformCommission, pricing.totalStudentPays, pricing.estimatedStripeFee, pricing.teacherReceives]) {
-      expect(Number.isInteger(value * 100)).toBe(true)
-    }
-  })
-
-  it('reports the currency as GBP', () => {
-    expect(calculatePricing(20, 1).currency).toBe('gbp')
-  })
-
-  it('produces zero commission and zero charge for a free (0 rate) lesson', () => {
-    const pricing = calculatePricing(0, 1)
-    expect(pricing.baseAmount).toBe(0)
-    expect(pricing.platformCommission).toBe(0)
-    expect(pricing.totalStudentPays).toBe(0)
+  it('refunds an unused lesson at the discounted per-lesson price', () => {
+    expect(packagePrice(15, 'starter').perLesson).toBe(20.7)
   })
 })
 
 describe('toPence / toPounds', () => {
-  it('converts pounds to integer pence', () => {
-    expect(toPence(20)).toBe(2000)
-    expect(toPence(12.5)).toBe(1250)
-    expect(toPence(0.1)).toBe(10)
-  })
-
-  it('round-trips pence back to pounds', () => {
-    expect(toPounds(2000)).toBe(20)
-    expect(toPounds(1250)).toBe(12.5)
-  })
-
-  it('avoids floating point drift for common amounts', () => {
-    // 0.1 + 0.2 famously != 0.3 in raw floating point — toPence must not leak that.
-    expect(toPence(0.1 + 0.2)).toBe(30)
+  it('converts both ways', () => {
+    expect(toPence(25.63)).toBe(2563)
+    expect(toPounds(2563)).toBe(25.63)
   })
 })

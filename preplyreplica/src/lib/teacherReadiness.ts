@@ -11,12 +11,16 @@ export interface TeacherReadinessInput {
   languages: string[] | null
   hourly_rate: number | null
   avatar_url: string | null
+  /** Private contact number (profiles.phone), used for lesson homework. */
+  phone: string | null
+  /** profiles.gender: students only see teachers of their own gender. */
+  gender: string | null
   identityDocumentCount: number
-  stripe_charges_enabled: boolean
+  payments_enabled: boolean
 }
 
 export interface MissingItem {
-  key: 'profile' | 'photo' | 'identity' | 'payouts'
+  key: 'profile' | 'phone' | 'gender' | 'photo' | 'identity' | 'payouts'
   title: string
   description: string
   href: string
@@ -24,6 +28,8 @@ export interface MissingItem {
 
 export interface TeacherReadiness {
   profile: boolean
+  phone: boolean
+  gender: boolean
   photo: boolean
   identity: boolean
   payouts: boolean
@@ -44,19 +50,25 @@ export function isProfileComplete(t: Pick<TeacherReadinessInput, 'headline' | 'b
 
 export function getTeacherReadiness(input: TeacherReadinessInput): TeacherReadiness {
   const profile = isProfileComplete(input)
+  const phone = !!input.phone
+  const gender = !!input.gender
   const photo = !!input.avatar_url
   const identity = input.identityDocumentCount > 0
-  const payouts = input.stripe_charges_enabled
+  const payouts = input.payments_enabled
 
   const missing: MissingItem[] = []
   if (!profile)
     missing.push({ key: 'profile', title: 'Complete your profile', description: 'Add a headline, bio, subjects, languages and your rate.', href: '/teacher/profile/details' })
+  if (!phone)
+    missing.push({ key: 'phone', title: 'Add your WhatsApp number', description: 'Private: we contact you on WhatsApp about lessons, never shown to students.', href: '/teacher/profile/details' })
+  if (!gender)
+    missing.push({ key: 'gender', title: 'Tell us your gender', description: 'Students are matched with teachers of the same gender.', href: '/teacher/profile/details' })
   if (!photo)
     missing.push({ key: 'photo', title: 'Add a profile photo', description: 'Students see it on your profile and when booking.', href: '/teacher/profile/photo' })
   if (!identity)
     missing.push({ key: 'identity', title: 'Upload an ID document', description: 'A passport, ID card or driving licence, so we can verify you.', href: '/teacher/profile/identity' })
   if (!payouts)
-    missing.push({ key: 'payouts', title: 'Set up payouts', description: 'Connect Stripe so you can be paid for lessons.', href: '/teacher/profile/payouts' })
+    missing.push({ key: 'payouts', title: 'Set up payouts', description: 'Connect a payout account so you can be paid for lessons.', href: '/teacher/profile/payouts' })
 
-  return { profile, photo, identity, payouts, canSubmit: missing.length === 0, missing }
+  return { profile, phone, gender, photo, identity, payouts, canSubmit: missing.length === 0, missing }
 }

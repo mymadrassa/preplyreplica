@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
-import { refundBookingPayment } from '@/lib/stripe'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { paymentRefFor } from '@/lib/payments'
+import { returnPackageLesson } from '@/lib/packages'
 import { sendBookingCancelledEmail } from '@/lib/email'
 import { CANCELLATION_CUTOFF_HOURS } from '@/lib/constants'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
+  // Bookings and payments are written only by the server (see migration 0036), after the checks below.
+  const db = createSupabaseServiceRoleClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
   if (!userId) {
@@ -14,7 +17,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const { data: booking } = await supabase
     .from('bookings')
-    .select('*, teacher_profiles(stripe_account_id, profiles(full_name, email)), profiles!student_id(full_name, email)')
+    .select('*, teacher_profiles(payout_account_id, profiles(full_name, email)), profiles!student_id(full_name, email)')
     .eq('id', params.id)
     .single()
 
@@ -36,20 +39,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
     )
   }
 
-  const { data: payment } = await supabase.from('payments').select('*').eq('booking_id', booking.id).single()
-  const teacherAccountId = (booking as any).teacher_profiles?.stripe_account_id
-  if (!payment?.stripe_payment_intent_id || !teacherAccountId) {
+  // A lesson from a package has no payment of its own: the package was paid upfront.
+  const packageId = booking.package_id
+  const { data: payment } = packageId ? { data: null } : await supabase.from('payments').select('*').eq('booking_id', booking.id).single()
+  const charge = paymentRefFor(payment, (booking as any).teacher_profiles)
+  if (!packageId && (!payment || !charge)) {
     return NextResponse.json({ error: 'Payment record is missing for this booking' }, { status: 500 })
   }
 
   try {
-    await refundBookingPayment(payment.stripe_payment_intent_id, teacherAccountId)
+    if (charge) await charge.provider.refundPayment(charge.ref)
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Unable to process the refund' }, { status: 502 })
   }
 
-  await supabase.from('bookings').update({ status: 'cancelled' } as any).eq('id', booking.id)
-  await supabase.from('payments').update({ status: 'refunded' } as any).eq('id', payment.id)
+  await db.from('bookings').update({ status: 'cancelled' } as any).eq('id', booking.id)
+  if (payment) await db.from('payments').update({ status: 'refunded' } as any).eq('id', payment.id)
+  // A package lesson goes back into the package instead of being refunded.
+  if (packageId) await returnPackageLesson(packageId)
 
   const teacherContact = (booking as any).teacher_profiles?.profiles
   if (teacherContact?.email) {

@@ -12,7 +12,9 @@ export type Database = {
           username: string | null
           role: 'student' | 'teacher' | 'admin'
           avatar_url: string | null
-          pending_stripe_fees: number
+          phone: string | null
+          gender: 'male' | 'female' | null
+          pending_processing_fees: number
           created_at: string
         }
         Insert: {
@@ -22,7 +24,9 @@ export type Database = {
           username?: string | null
           role?: 'student' | 'teacher' | 'admin'
           avatar_url?: string | null
-          pending_stripe_fees?: number
+          phone?: string | null
+          gender?: 'male' | 'female' | null
+          pending_processing_fees?: number
           created_at?: string
         }
         Update: {
@@ -31,7 +35,9 @@ export type Database = {
           username?: string | null
           role?: 'student' | 'teacher' | 'admin'
           avatar_url?: string | null
-          pending_stripe_fees?: number
+          phone?: string | null
+          gender?: 'male' | 'female' | null
+          pending_processing_fees?: number
           created_at?: string
         }
         Relationships: []
@@ -51,9 +57,14 @@ export type Database = {
           subjects: string[]
           hourly_rate: number
           video_url: string | null
-          stripe_account_id: string | null
-          stripe_charges_enabled: boolean
-          stripe_payouts_enabled: boolean
+          payout_account_id: string | null
+          payment_provider: string
+          tier: 'starter' | 'mid' | 'top'
+          tier_locked: boolean
+          tier_updated_at: string | null
+          approved_at: string | null
+          payments_enabled: boolean
+          payouts_enabled: boolean
           status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg: number
           rating_count: number
@@ -69,9 +80,14 @@ export type Database = {
           subjects?: string[]
           hourly_rate?: number
           video_url?: string | null
-          stripe_account_id?: string | null
-          stripe_charges_enabled?: boolean
-          stripe_payouts_enabled?: boolean
+          payout_account_id?: string | null
+          payment_provider?: string
+          tier?: 'starter' | 'mid' | 'top'
+          tier_locked?: boolean
+          tier_updated_at?: string | null
+          approved_at?: string | null
+          payments_enabled?: boolean
+          payouts_enabled?: boolean
           status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg?: number
           rating_count?: number
@@ -86,9 +102,14 @@ export type Database = {
           subjects?: string[]
           hourly_rate?: number
           video_url?: string | null
-          stripe_account_id?: string | null
-          stripe_charges_enabled?: boolean
-          stripe_payouts_enabled?: boolean
+          payout_account_id?: string | null
+          payment_provider?: string
+          tier?: 'starter' | 'mid' | 'top'
+          tier_locked?: boolean
+          tier_updated_at?: string | null
+          approved_at?: string | null
+          payments_enabled?: boolean
+          payouts_enabled?: boolean
           status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
           rating_avg?: number
           rating_count?: number
@@ -100,6 +121,240 @@ export type Database = {
             foreignKeyName: 'teacher_profiles_id_fkey'
             columns: ['id']
             isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      lesson_packages: {
+        Row: {
+          id: string
+          student_id: string
+          teacher_id: string
+          lessons_total: number
+          lessons_used: number
+          price: number
+          teacher_fee_per_lesson: number
+          refund_per_lesson: number
+          refunded_amount: number
+          tier: 'starter' | 'mid' | 'top'
+          provider: string
+          provider_checkout_id: string | null
+          provider_payment_id: string | null
+          status: 'pending_payment' | 'active' | 'used_up' | 'expired' | 'cancelled'
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          teacher_id: string
+          lessons_total: number
+          lessons_used?: number
+          price: number
+          teacher_fee_per_lesson: number
+          refund_per_lesson: number
+          refunded_amount?: number
+          tier: 'starter' | 'mid' | 'top'
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_payment_id?: string | null
+          status?: 'pending_payment' | 'active' | 'used_up' | 'expired' | 'cancelled'
+          expires_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          teacher_id?: string
+          lessons_total?: number
+          lessons_used?: number
+          price?: number
+          teacher_fee_per_lesson?: number
+          refund_per_lesson?: number
+          refunded_amount?: number
+          tier?: 'starter' | 'mid' | 'top'
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_payment_id?: string | null
+          status?: 'pending_payment' | 'active' | 'used_up' | 'expired' | 'cancelled'
+          expires_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_packages_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lesson_packages_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      session_feedback: {
+        Row: {
+          id: string
+          booking_id: string
+          author_id: string
+          recipient_id: string
+          author_role: 'student' | 'teacher'
+          status: 'given' | 'skipped'
+          rating: number | null
+          comment: string | null
+          visibility: 'public' | 'private' | null
+          tags: string[]
+          recipient_seen_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          author_id: string
+          recipient_id: string
+          author_role: 'student' | 'teacher'
+          status: 'given' | 'skipped'
+          rating?: number | null
+          comment?: string | null
+          visibility?: 'public' | 'private' | null
+          tags?: string[]
+          recipient_seen_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          booking_id?: string
+          author_id?: string
+          recipient_id?: string
+          author_role?: 'student' | 'teacher'
+          status?: 'given' | 'skipped'
+          rating?: number | null
+          comment?: string | null
+          visibility?: 'public' | 'private' | null
+          tags?: string[]
+          recipient_seen_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'session_feedback_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: false
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'session_feedback_author_id_fkey'
+            columns: ['author_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'session_feedback_recipient_id_fkey'
+            columns: ['recipient_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      lesson_homework: {
+        Row: {
+          id: string
+          booking_id: string
+          teacher_id: string
+          student_id: string
+          revision_from_surah: number | null
+          revision_from_ayah: number | null
+          revision_to_surah: number | null
+          revision_to_ayah: number | null
+          memorization_from_surah: number | null
+          memorization_from_ayah: number | null
+          memorization_to_surah: number | null
+          memorization_to_ayah: number | null
+          note: string | null
+          sent_channel: 'whatsapp' | 'email' | null
+          whatsapp_message_id: string | null
+          delivery_status: 'sent' | 'delivered' | 'read' | 'failed' | null
+          last_error: string | null
+          sent_at: string | null
+          student_seen_at: string | null
+          done_at: string | null
+          teacher_seen_done_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          teacher_id: string
+          student_id: string
+          revision_from_surah?: number | null
+          revision_from_ayah?: number | null
+          revision_to_surah?: number | null
+          revision_to_ayah?: number | null
+          memorization_from_surah?: number | null
+          memorization_from_ayah?: number | null
+          memorization_to_surah?: number | null
+          memorization_to_ayah?: number | null
+          note?: string | null
+          sent_channel?: 'whatsapp' | 'email' | null
+          whatsapp_message_id?: string | null
+          delivery_status?: 'sent' | 'delivered' | 'read' | 'failed' | null
+          last_error?: string | null
+          sent_at?: string | null
+          student_seen_at?: string | null
+          done_at?: string | null
+          teacher_seen_done_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          revision_from_surah?: number | null
+          revision_from_ayah?: number | null
+          revision_to_surah?: number | null
+          revision_to_ayah?: number | null
+          memorization_from_surah?: number | null
+          memorization_from_ayah?: number | null
+          memorization_to_surah?: number | null
+          memorization_to_ayah?: number | null
+          note?: string | null
+          sent_channel?: 'whatsapp' | 'email' | null
+          whatsapp_message_id?: string | null
+          delivery_status?: 'sent' | 'delivered' | 'read' | 'failed' | null
+          last_error?: string | null
+          sent_at?: string | null
+          student_seen_at?: string | null
+          done_at?: string | null
+          teacher_seen_done_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_homework_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: true
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lesson_homework_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lesson_homework_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           }
@@ -273,13 +528,14 @@ export type Database = {
           end_at: string
           scheduled_at: string | null
           status: 'pending' | 'pending_payment' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'
+          package_id: string | null
           recurrence_group_id: string | null
           recurrence: string | null
           base_amount: number | null
           platform_commission: number | null
           total_student_pays: number | null
           teacher_receives: number | null
-          stripe_checkout_session_id: string | null
+          provider_checkout_id: string | null
           reminder_sent_at: string | null
           teacher_confirmed_at: string | null
           admin_confirmed_at: string | null
@@ -303,13 +559,14 @@ export type Database = {
           end_at: string
           scheduled_at?: string | null
           status?: 'pending' | 'pending_payment' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'
+          package_id?: string | null
           recurrence_group_id?: string | null
           recurrence?: string | null
           base_amount?: number | null
           platform_commission?: number | null
           total_student_pays?: number | null
           teacher_receives?: number | null
-          stripe_checkout_session_id?: string | null
+          provider_checkout_id?: string | null
           reminder_sent_at?: string | null
           teacher_confirmed_at?: string | null
           admin_confirmed_at?: string | null
@@ -332,13 +589,14 @@ export type Database = {
           end_at?: string
           scheduled_at?: string | null
           status?: 'pending' | 'pending_payment' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'
+          package_id?: string | null
           recurrence_group_id?: string | null
           recurrence?: string | null
           base_amount?: number | null
           platform_commission?: number | null
           total_student_pays?: number | null
           teacher_receives?: number | null
-          stripe_checkout_session_id?: string | null
+          provider_checkout_id?: string | null
           reminder_sent_at?: string | null
           teacher_confirmed_at?: string | null
           admin_confirmed_at?: string | null
@@ -370,13 +628,14 @@ export type Database = {
         Row: {
           id: string
           booking_id: string
-          stripe_payment_intent_id: string | null
-          stripe_checkout_session_id: string | null
+          provider_payment_id: string | null
+          provider: string
+          provider_checkout_id: string | null
           amount: number
           currency: string
           platform_fee: number
           teacher_fee: number
-          stripe_fee_estimate: number
+          processing_fee_estimate: number
           pending_fees_billed: number
           payout_at: string | null
           status: string
@@ -385,13 +644,14 @@ export type Database = {
         Insert: {
           id?: string
           booking_id: string
-          stripe_payment_intent_id?: string | null
-          stripe_checkout_session_id?: string | null
+          provider_payment_id?: string | null
+          provider?: string
+          provider_checkout_id?: string | null
           amount: number
           currency?: string
           platform_fee: number
           teacher_fee: number
-          stripe_fee_estimate?: number
+          processing_fee_estimate?: number
           pending_fees_billed?: number
           payout_at?: string | null
           status?: string
@@ -399,13 +659,14 @@ export type Database = {
         }
         Update: {
           booking_id?: string
-          stripe_payment_intent_id?: string | null
-          stripe_checkout_session_id?: string | null
+          provider_payment_id?: string | null
+          provider?: string
+          provider_checkout_id?: string | null
           amount?: number
           currency?: string
           platform_fee?: number
           teacher_fee?: number
-          stripe_fee_estimate?: number
+          processing_fee_estimate?: number
           pending_fees_billed?: number
           payout_at?: string | null
           status?: string
@@ -664,7 +925,12 @@ export type Database = {
       }
     }
     Views: {}
-    Functions: {}
+    Functions: {
+      use_package_lesson: {
+        Args: { package: string; delta: number }
+        Returns: boolean
+      }
+    }
     Enums: {}
     CompositeTypes: {}
   }

@@ -63,7 +63,7 @@ export default function HomePage() {
             <Card className="border-slate-100 bg-slate-50/80 shadow-none">
               <ShieldCheck className="h-6 w-6 text-brand-600" aria-hidden="true" />
               <p className="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Secure payments</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">Stripe checkout for stress-free bookings.</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">Secure checkout for stress-free bookings.</p>
             </Card>
           </div>
         </div>

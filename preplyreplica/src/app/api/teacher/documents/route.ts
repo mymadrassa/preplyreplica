@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { loadTeacherProfileState, saveToPendingCopy, type TeacherProfileState } from '@/lib/teacherProfileState'
+import { verifyUpload } from '@/lib/verifyUpload'
 
 const documentSchema = z.object({
   bucket_path: z.string().min(3).max(500),
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
     await supabase.storage.from('teacher-documents').remove([bucket_path])
     return NextResponse.json({ error: state ? LOCKED_ERROR : 'Finish your teacher profile before adding documents.' }, { status: 409 })
   }
+
+  // Only real PDFs and images are kept: the file's first bytes decide, not its name.
+  const problem = await verifyUpload('document', bucket_path)
+  if (problem) return NextResponse.json({ error: problem }, { status: 400 })
 
   const reviewed = changeNeedsReview(state, kind)
   const { data, error } = await supabase

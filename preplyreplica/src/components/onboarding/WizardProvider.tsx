@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 export type WeeklySlot = { weekday: number; start_time: string; end_time: string }
 
 export interface WizardState {
+  gender: 'male' | 'female' | null
   courses: string[]
   immediateAvailability: 'now' | 'this_week' | 'flexible' | null
   weeklySlots: WeeklySlot[]
@@ -14,6 +15,7 @@ export interface WizardState {
 }
 
 const EMPTY_STATE: WizardState = {
+  gender: null,
   courses: [],
   immediateAvailability: null,
   weeklySlots: [],
@@ -42,7 +44,7 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(STORAGE_KEY)
-      if (stored) setState(JSON.parse(stored))
+      if (stored) setState({ ...EMPTY_STATE, ...JSON.parse(stored) })
     } catch {
       // Corrupt or inaccessible storage just means starting fresh.
     }

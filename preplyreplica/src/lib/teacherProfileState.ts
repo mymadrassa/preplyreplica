@@ -11,6 +11,9 @@ export type DocumentRow = Pick<Database['public']['Tables']['teacher_documents']
 export interface TeacherProfileState {
   teacher: TeacherRow
   avatarUrl: string | null
+  /** Private, not reviewed: profiles.phone. */
+  phone: string | null
+  gender: string | null
   documents: DocumentRow[]
   changes: ChangesRow | null
   mode: ProfileEditMode
@@ -36,7 +39,7 @@ export function reviewedValuesOf(teacher: Pick<TeacherRow, 'headline' | 'bio' | 
 export async function loadTeacherProfileState(supabase: Db, teacherId: string): Promise<TeacherProfileState | null> {
   const [{ data: teacher }, { data: profile }, { data: documents }, { data: changes }] = await Promise.all([
     supabase.from('teacher_profiles').select('*').eq('id', teacherId).maybeSingle(),
-    supabase.from('profiles').select('avatar_url').eq('id', teacherId).maybeSingle(),
+    supabase.from('profiles').select('avatar_url, phone, gender').eq('id', teacherId).maybeSingle(),
     supabase.from('teacher_documents').select('id, bucket_path, kind, review_change, uploaded_at').eq('teacher_id', teacherId).order('uploaded_at', { ascending: true }),
     supabase.from('teacher_profile_changes').select('*').eq('teacher_id', teacherId).maybeSingle(),
   ])
@@ -47,6 +50,8 @@ export async function loadTeacherProfileState(supabase: Db, teacherId: string): 
   return {
     teacher,
     avatarUrl,
+    phone: profile?.phone ?? null,
+    gender: profile?.gender ?? null,
     documents: docs,
     changes: changes ?? null,
     mode: profileEditMode(teacher.status, changes?.state ?? null),
@@ -57,9 +62,11 @@ export async function loadTeacherProfileState(supabase: Db, teacherId: string): 
       languages: teacher.languages,
       hourly_rate: teacher.hourly_rate,
       avatar_url: avatarUrl,
+      phone: profile?.phone ?? null,
+      gender: profile?.gender ?? null,
       // A new ID waiting for review doesn't count yet; one marked for removal still does until approved.
       identityDocumentCount: docs.filter((d) => d.kind === 'identity' && d.review_change !== 'add').length,
-      stripe_charges_enabled: teacher.stripe_charges_enabled,
+      payments_enabled: teacher.payments_enabled,
     }),
     live: reviewedValuesOf(teacher, avatarUrl),
     pending: changes

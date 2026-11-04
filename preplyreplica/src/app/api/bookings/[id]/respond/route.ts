@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerClient } from '@/lib/supabase/server'
-import { captureBookingPayment, cancelBookingPayment } from '@/lib/stripe'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { paymentRefFor } from '@/lib/payments'
+import { returnPackageLesson } from '@/lib/packages'
 import { sendBookingApprovedEmail, sendBookingRejectedEmail } from '@/lib/email'
 
 const respondSchema = z.object({ action: z.enum(['approve', 'reject']) })
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
+  // Bookings and payments are written only by the server (see migration 0036), after the checks below.
+  const db = createSupabaseServiceRoleClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
   if (!userId) {
@@ -22,7 +25,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const { data: booking } = await supabase
     .from('bookings')
-    .select('*, profiles!student_id(full_name, email), teacher_profiles(stripe_account_id, profiles(full_name))')
+    .select('*, profiles!student_id(full_name, email), teacher_profiles(payout_account_id, profiles(full_name))')
     .eq('id', params.id)
     .single()
 
@@ -36,9 +39,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ error: `This booking is ${booking.status}, not awaiting a response.` }, { status: 409 })
   }
 
-  const { data: payment } = await supabase.from('payments').select('*').eq('booking_id', booking.id).single()
-  const teacherAccountId = (booking as any).teacher_profiles?.stripe_account_id
-  if (!payment?.stripe_payment_intent_id || !teacherAccountId) {
+  // A lesson from a package has no payment of its own: the package was paid upfront.
+  const packageId = booking.package_id
+  const { data: payment } = packageId ? { data: null } : await supabase.from('payments').select('*').eq('booking_id', booking.id).single()
+  const charge = paymentRefFor(payment, (booking as any).teacher_profiles)
+  if (!packageId && (!payment || !charge)) {
     return NextResponse.json({ error: 'Payment record is missing for this booking' }, { status: 500 })
   }
 
@@ -49,9 +54,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   try {
     if (action === 'approve') {
-      await captureBookingPayment(payment.stripe_payment_intent_id, teacherAccountId)
-      await supabase.from('bookings').update({ status: 'confirmed' } as any).eq('id', booking.id)
-      await supabase.from('payments').update({ status: 'succeeded' } as any).eq('id', payment.id)
+      if (charge) await charge.provider.capturePayment(charge.ref)
+      await db.from('bookings').update({ status: 'confirmed' } as any).eq('id', booking.id)
+      if (payment) await db.from('payments').update({ status: 'succeeded' } as any).eq('id', payment.id)
 
       if (studentProfile?.email) {
         await sendBookingApprovedEmail({
@@ -65,9 +70,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
         })
       }
     } else {
-      await cancelBookingPayment(payment.stripe_payment_intent_id, teacherAccountId)
-      await supabase.from('bookings').update({ status: 'rejected' } as any).eq('id', booking.id)
-      await supabase.from('payments').update({ status: 'cancelled' } as any).eq('id', payment.id)
+      if (charge) await charge.provider.cancelPayment(charge.ref)
+      await db.from('bookings').update({ status: 'rejected' } as any).eq('id', booking.id)
+      if (payment) await db.from('payments').update({ status: 'cancelled' } as any).eq('id', payment.id)
+      if (packageId) await returnPackageLesson(packageId)
 
       if (studentProfile?.email) {
         await sendBookingRejectedEmail({

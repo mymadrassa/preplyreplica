@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { loadTeacherProfileState, removeAvatarFile, saveToPendingCopy } from '@/lib/teacherProfileState'
+import { verifyUpload } from '@/lib/verifyUpload'
 
 const photoSchema = z.object({ path: z.string().min(3).max(500) })
 
@@ -34,6 +35,10 @@ export async function POST(request: Request) {
   if (!state) {
     return NextResponse.json({ error: 'Finish your teacher profile first.' }, { status: 409 })
   }
+
+  // The avatars bucket is public: only real images may stay in it.
+  const problem = await verifyUpload('photo', path)
+  if (problem) return NextResponse.json({ error: problem }, { status: 400 })
 
   const url = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
 

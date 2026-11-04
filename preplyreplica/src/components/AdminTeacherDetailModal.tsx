@@ -7,6 +7,8 @@ import { Button } from '@/components/Button'
 import { StatusBadge } from '@/components/StatusBadge'
 import { useToast } from '@/components/ToastProvider'
 import { Avatar } from '@/components/Avatar'
+import { AdminTierSelect } from '@/components/AdminTierSelect'
+import type { Tier } from '@/lib/pricing'
 
 type Action = 'approve' | 'reject' | 'suspend' | 'reset'
 
@@ -21,13 +23,16 @@ interface AdminTeacherDetailModalProps {
   teacherId: string
   name: string
   email: string | null
+  gender: string | null
   avatarUrl: string | null
   headline: string | null
   bio: string | null
   subjects: string[]
   languages: string[]
   hourlyRate: number
-  stripeChargesEnabled: boolean
+  paymentsEnabled: boolean
+  tier: Tier
+  tierLocked: boolean
   videoUrl: string | null
   documentUrls: { name: string; url: string; kind?: 'identity' | 'certificate'; reviewChange?: 'add' | 'remove' | null }[]
   status: string
@@ -42,13 +47,16 @@ export function AdminTeacherDetailModal({
   teacherId,
   name,
   email,
+  gender,
   avatarUrl,
   headline,
   bio,
   subjects,
   languages,
   hourlyRate,
-  stripeChargesEnabled,
+  paymentsEnabled,
+  tier,
+  tierLocked,
   videoUrl,
   documentUrls,
   status: initialStatus,
@@ -88,6 +96,7 @@ export function AdminTeacherDetailModal({
             <div>
               <p className="text-lg font-semibold text-slate-900">{name}</p>
               <p className="text-sm text-slate-500">{email}</p>
+              <p className="text-xs text-slate-500">{gender === 'male' ? 'Male · teaches brothers' : gender === 'female' ? 'Female · teaches sisters' : 'Gender not set yet'}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="cursor-pointer rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
@@ -123,9 +132,14 @@ export function AdminTeacherDetailModal({
               <p className="mt-1">£{hourlyRate}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Stripe payouts</p>
-              <p className="mt-1">{stripeChargesEnabled ? 'Enabled' : 'Not completed yet'}</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Payouts</p>
+              <p className="mt-1">{paymentsEnabled ? 'Enabled' : 'Not completed yet'}</p>
             </div>
+            {status === 'approved' ? (
+              <div className="col-span-full">
+                <AdminTierSelect teacherId={teacherId} tier={tier} locked={tierLocked} />
+              </div>
+            ) : null}
           </div>
           {videoUrl ? (
             <div>

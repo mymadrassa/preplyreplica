@@ -4,6 +4,8 @@ import { sendAwaitingAdminReviewEmail } from '@/lib/email'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
+  // Bookings and payments are written only by the server (see migration 0036), after the checks below.
+  const db = createSupabaseServiceRoleClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
   if (!userId) {
@@ -32,7 +34,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ error: 'You already marked this session as complete.' }, { status: 409 })
   }
 
-  await supabase.from('bookings').update({ teacher_confirmed_at: new Date().toISOString() } as any).eq('id', booking.id)
+  await db.from('bookings').update({ teacher_confirmed_at: new Date().toISOString() } as any).eq('id', booking.id)
 
   // Admin recipients aren't gated behind the user's own session, so look
   // them up with the service-role client rather than the RLS-scoped one.

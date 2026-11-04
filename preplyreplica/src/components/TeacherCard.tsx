@@ -9,7 +9,8 @@ interface TeacherCardProps {
     full_name: string
     headline: string | null
     rating_avg: number
-    hourly_rate: number
+    /** What a one-hour lesson costs within the teacher's 10-lesson package. */
+    lesson_price: number
     subjects: string[]
     languages: string[]
     status: string
@@ -25,7 +26,7 @@ export function TeacherCard({ teacher }: TeacherCardProps) {
           <p className="mt-1 text-sm text-slate-600">{teacher.headline}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-          <span className="font-semibold text-slate-900">£{teacher.hourly_rate}/hr</span>
+          <span className="font-semibold text-slate-900">£{teacher.lesson_price.toFixed(2)} / lesson</span>
           {teacher.subjects.length ? <span>{teacher.subjects.slice(0, 3).join(', ')}</span> : null}
           {teacher.languages.length ? <span>{teacher.languages.slice(0, 3).join(', ')}</span> : null}
         </div>

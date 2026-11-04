@@ -7,6 +7,9 @@ export interface CompleteSignupParams {
   password: string
   role: 'student' | 'teacher'
   emailRedirectTo: string
+  /** Already normalized to international format. */
+  phone?: string | null
+  gender?: 'male' | 'female' | null
 }
 
 export type CompleteSignupResult =
@@ -26,7 +29,7 @@ export type CompleteSignupResult =
 // policy -- which checks auth.uid() = id -- would otherwise reject the write).
 export async function completeSignup(
   supabase: SupabaseClient<Database>,
-  { email, password, role, emailRedirectTo }: CompleteSignupParams,
+  { email, password, role, emailRedirectTo, phone = null, gender = null }: CompleteSignupParams,
   profilesClient: SupabaseClient<Database> = supabase
 ): Promise<CompleteSignupResult> {
   const { data, error } = await supabase.auth.signUp({
@@ -63,6 +66,8 @@ export async function completeSignup(
     id: data.user.id,
     email,
     role,
+    ...(phone ? { phone } : {}),
+    ...(gender ? { gender } : {}),
   }
   const { error: profileError } = await profilesClient.from('profiles').upsert(profile)
   if (profileError) {

@@ -96,7 +96,7 @@ export function MarksSummary({ pageNumber, blocks, verseNotes, selectedWordIds, 
   }
 
   return (
-    <aside data-mushaf-keep aria-label="Revision history" className="flex max-h-[calc(100vh-7rem)] flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+    <aside data-mushaf-keep aria-label="Revision history" className="flex min-h-0 max-h-full flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-900">Revision history</p>
         <div className="flex items-center gap-1">

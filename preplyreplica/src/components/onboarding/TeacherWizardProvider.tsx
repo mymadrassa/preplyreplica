@@ -11,7 +11,7 @@ export interface TeacherWizardState {
   videoUrl: string
   // Set right after a successful submit, once the wizard's other fields
   // have already been reset -- the one piece of state StepPayouts needs
-  // to know whether there's a real Stripe setup link to offer.
+  // to know whether there's a real payout setup link to offer.
   onboardingUrl: string | null
 }
 

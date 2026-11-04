@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { MailCheck } from 'lucide-react'
-import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { useToast } from '@/components/ToastProvider'
@@ -12,19 +11,22 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
-  const supabase = createBrowserClient()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLoading(true)
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+    // The app sends this email itself, with a link that works in any browser (see /api/auth/forgot-password).
+    const response = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
     })
+    const result = await response.json().catch(() => ({}))
 
     setLoading(false)
-    if (error) {
-      showToast('error', error.message)
+    if (!response.ok) {
+      showToast('error', result.error || 'Something went wrong. Please try again.')
       return
     }
     setSent(true)

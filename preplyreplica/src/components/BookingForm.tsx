@@ -1,40 +1,46 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/components/BookingForm.tsx
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
-import { Info, Gift } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import { Info, Gift, Package } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { Select } from '@/components/Select'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingBlock } from '@/components/LoadingBlock'
 import { AvailabilityCalendar } from '@/components/AvailabilityCalendar'
 import { CANCELLATION_CUTOFF_HOURS, MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
-import { calculatePricing } from '@/lib/pricing'
+import { LESSON_MINUTES, PACKAGE, TRIAL, trialPrice, type Tier } from '@/lib/pricing'
 import type { AvailabilitySlot, AvailabilityException, OccupyingBooking } from '@/lib/availability'
 
 interface BookingFormProps {
   teacher: {
     id: string
     hourly_rate: number
+    tier: Tier
     subjects: string[]
     languages: string[]
   }
-  /** Whether the current student has never had a non-cancelled/rejected booking with this teacher — the only case a free trial can be offered. */
-  isTrialEligible?: boolean
-  /** Pre-checks the trial checkbox — used when the student arrives via the onboarding wizard's `?intent=trial` link. */
-  defaultAsTrial?: boolean
+  /** The student's active package with this teacher, if any: lessons booked from it need no payment. */
+  activePackage?: { id: string; lessonsLeft: number; expiresAt: string | null } | null
+  /**
+   * The student has had their first lesson (the trial) with this teacher, so
+   * lessons are booked from a package. Otherwise the only thing to book is the trial.
+   */
+  packageRequired?: boolean
 }
 
 function dateKeyLocal(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial = false }: BookingFormProps) {
+export function BookingForm({ teacher, activePackage = null, packageRequired = false }: BookingFormProps) {
   const { showToast } = useToast()
   const [subject, setSubject] = useState(teacher.subjects?.[0] || '')
   const [language, setLanguage] = useState(teacher.languages?.[0] || '')
-  const [duration, setDuration] = useState('60')
-  const [asTrial, setAsTrial] = useState(isTrialEligible && defaultAsTrial)
+  // Trial first, then lessons from a package: there are no single paid one-hour lessons.
+  const trial = !packageRequired
+  const canUsePackage = !!activePackage && activePackage.lessonsLeft > 0
+  const durationMinutes = trial ? TRIAL.minutes : LESSON_MINUTES
   const [selectedStart, setSelectedStart] = useState<Date | null>(null)
   const [slots, setSlots] = useState<AvailabilitySlot[]>([])
   const [exceptions, setExceptions] = useState<AvailabilityException[]>([])
@@ -66,8 +72,8 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
     [teacher.id]
   )
 
-  const pricing = useMemo(() => calculatePricing(teacher.hourly_rate, Number(duration) / 60, asTrial), [teacher.hourly_rate, duration, asTrial])
-  const normalPricing = useMemo(() => calculatePricing(teacher.hourly_rate, Number(duration) / 60, false), [teacher.hourly_rate, duration])
+  // Shown in the browser with the default card-fee estimate; the server recomputes with the provider's own.
+  const pricing = trialPrice()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -85,9 +91,9 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
         teacherId: teacher.id,
         subject,
         language,
-        duration: Number(duration),
         startAt: selectedStart.toISOString(),
-        isTrial: isTrialEligible && asTrial,
+        // Without a package, the request is for the trial.
+        ...(!trial && activePackage ? { packageId: activePackage.id } : {}),
       }),
       headers: { 'Content-Type': 'application/json' },
     })
@@ -100,37 +106,77 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
       return
     }
 
+    if (result.paidWithPackage) {
+      showToast('success', 'Lesson requested. Your teacher will confirm it soon.')
+      window.location.href = '/student/bookings'
+      return
+    }
     window.location.href = result.checkoutUrl
+  }
+
+  // Trial done and no lessons left in a package: the next step is choosing the package.
+  if (!trial && !canUsePackage) {
+    return (
+      <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+        <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-900">
+          <Package className="h-5 w-5 text-emerald-600" aria-hidden="true" /> Continue with a package
+        </h2>
+        <p className="text-sm text-slate-600">
+          You&apos;ve had your trial with this teacher. Lessons from now on are booked from a 10-lesson package. Choose it above, then book each lesson here.
+        </p>
+        <a href="#package" className="inline-flex text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+          See the package
+        </a>
+      </div>
+    )
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6">
-      <h2 className="text-xl font-semibold text-slate-900">Book a lesson</h2>
+      <h2 className="text-xl font-semibold text-slate-900">{trial ? 'Book your trial lesson' : 'Book a lesson'}</h2>
       <Select label="Subject" name="subject" value={subject} onChange={(event) => setSubject(event.target.value)} options={teacher.subjects.map((subject) => ({ value: subject, label: subject }))} required />
       <Select label="Language" name="language" value={language} onChange={(event) => setLanguage(event.target.value)} options={teacher.languages.map((language) => ({ value: language, label: language }))} required />
-      <Select label="Duration" name="duration" value={duration} onChange={(event) => setDuration(event.target.value)} options={[{ value: '30', label: '30 minutes' }, { value: '45', label: '45 minutes' }, { value: '60', label: '60 minutes' }, { value: '90', label: '90 minutes' }]} required />
+      <p className="text-sm text-slate-600">{trial ? `${TRIAL.minutes}-minute trial lesson` : 'One-hour lesson'}</p>
 
-      {isTrialEligible ? (
-        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
-          <input type="checkbox" checked={asTrial} onChange={(event) => setAsTrial(event.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-brand-300 text-brand-600 focus:ring-brand-500" />
-          <span className="flex items-start gap-2">
-            <Gift className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-600" aria-hidden="true" />
-            <span>
-              <span className="block font-semibold">Book this as a free trial</span>
-              You pay only the teacher's rate — no platform fee. You can only do this once with this teacher.
-            </span>
+      {trial ? (
+        <p className="flex items-start gap-2 rounded-2xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
+          <Gift className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-600" aria-hidden="true" />
+          <span>
+            <span className="block font-semibold">Your first lesson is a {TRIAL.minutes}-minute trial</span>
+            Meet the teacher first. To continue afterwards, you&apos;ll choose a {PACKAGE.lessons}-lesson package.
           </span>
-        </label>
-      ) : null}
+        </p>
+      ) : (
+        <p className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <Package className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" aria-hidden="true" />
+          <span>
+            <span className="block font-semibold">From your package</span>
+            {activePackage!.lessonsLeft} lesson{activePackage!.lessonsLeft === 1 ? '' : 's'} left
+            {activePackage!.expiresAt ? `, valid until ${new Date(activePackage!.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}. No payment needed.
+          </span>
+        </p>
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm">
-        {asTrial && isTrialEligible ? (
-          <>
-            <p className="font-semibold text-slate-900">You'll pay £{pricing.totalStudentPays.toFixed(2)} for this trial</p>
-            <p className="mt-0.5 text-xs text-slate-500">Regular price would be £{normalPricing.totalStudentPays.toFixed(2)} — no platform fee applied</p>
-          </>
+        {!trial ? (
+          <p className="font-semibold text-slate-900">Paid with your package</p>
         ) : (
-          <p className="font-semibold text-slate-900">You'll pay £{pricing.totalStudentPays.toFixed(2)}</p>
+          <>
+            <dl className="space-y-1 text-slate-600">
+              <div className="flex justify-between">
+                <dt>{TRIAL.minutes}-minute trial</dt>
+                <dd>£{(pricing.studentPays - pricing.bookingFee).toFixed(2)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Booking fee</dt>
+                <dd>£{pricing.bookingFee.toFixed(2)}</dd>
+              </div>
+            </dl>
+            <p className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-semibold text-slate-900">
+              <span>Total</span>
+              <span>£{pricing.studentPays.toFixed(2)}</span>
+            </p>
+          </>
         )}
       </div>
 
@@ -146,7 +192,7 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
           slots={slots}
           exceptions={exceptions}
           bookings={bookings}
-          durationMinutes={Number(duration)}
+          durationMinutes={durationMinutes}
           selectedStart={selectedStart}
           onSelectStart={setSelectedStart}
           minNoticeHours={MIN_BOOKING_NOTICE_HOURS}
@@ -166,7 +212,7 @@ export function BookingForm({ teacher, isTrialEligible = false, defaultAsTrial =
         </p>
       </div>
 
-      <Button type="submit" loading={loading} disabled={!selectedStart}>{loading ? 'Processing…' : 'Continue to payment'}</Button>
+      <Button type="submit" loading={loading} disabled={!selectedStart}>{loading ? 'Processing…' : trial ? 'Continue to payment' : 'Request this lesson'}</Button>
     </form>
   )
 }

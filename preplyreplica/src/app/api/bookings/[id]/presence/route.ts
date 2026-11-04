@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 
 const presenceSchema = z.object({ event: z.enum(['joined', 'left']) })
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
+  // Bookings and payments are written only by the server (see migration 0036), after the checks below.
+  const db = createSupabaseServiceRoleClient()
   const session = await supabase.auth.getSession()
   const userId = session.data?.session?.user?.id
   if (!userId) {
@@ -36,11 +38,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     // First join only — a rejoin shouldn't overwrite the original join time,
     // so this update is scoped to rows where the column is still null.
     const column = isStudent ? 'student_joined_at' : 'teacher_joined_at'
-    await supabase.from('bookings').update({ [column]: now } as any).eq('id', params.id).is(column, null)
+    await db.from('bookings').update({ [column]: now } as any).eq('id', params.id).is(column, null)
   } else {
     // Always overwrite — reflects the most recent leave, in case of a rejoin.
     const column = isStudent ? 'student_left_at' : 'teacher_left_at'
-    await supabase.from('bookings').update({ [column]: now } as any).eq('id', params.id)
+    await db.from('bookings').update({ [column]: now } as any).eq('id', params.id)
   }
 
   return NextResponse.json({ ok: true })

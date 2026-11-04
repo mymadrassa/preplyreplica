@@ -76,3 +76,6 @@ export const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const label = `${hours12}:${String(minutes).padStart(2, '0')} ${period}`
   return { value, label }
 })
+
+/** Minimum password length, wherever a password is created or changed. */
+export const MIN_PASSWORD_LENGTH = 8

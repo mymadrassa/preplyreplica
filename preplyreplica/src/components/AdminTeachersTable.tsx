@@ -3,19 +3,22 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 import { StatusBadge } from '@/components/StatusBadge'
 import { AdminTeacherRowActions } from '@/components/AdminTeacherRowActions'
-import { toPounds } from '@/lib/pricing'
+import { toPounds, type Tier } from '@/lib/pricing'
 
 export interface AdminTeacherRow {
   id: string
   name: string
   email: string | null
+  gender: string | null
   avatarUrl: string | null
   headline: string | null
   bio: string | null
   subjects: string[]
   languages: string[]
   hourlyRate: number
-  stripeChargesEnabled: boolean
+  paymentsEnabled: boolean
+  tier: Tier
+  tierLocked: boolean
   videoUrl: string | null
   documentUrls: { name: string; url: string; kind?: 'identity' | 'certificate'; reviewChange?: 'add' | 'remove' | null }[]
   status: string
@@ -124,13 +127,16 @@ export function AdminTeachersTable({ rows, page, pageSize, totalCount, sortBy, s
                     teacherId={row.id}
                     name={row.name}
                     email={row.email}
+                    gender={row.gender}
                     avatarUrl={row.avatarUrl}
                     headline={row.headline}
                     bio={row.bio}
                     subjects={row.subjects}
                     languages={row.languages}
                     hourlyRate={row.hourlyRate}
-                    stripeChargesEnabled={row.stripeChargesEnabled}
+                    paymentsEnabled={row.paymentsEnabled}
+                    tier={row.tier}
+                    tierLocked={row.tierLocked}
                     videoUrl={row.videoUrl}
                     documentUrls={row.documentUrls}
                     status={row.status}

@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getOrCreateMushafSession } from '@preply-clone/mushaf'
 import { createServerClient } from '@/lib/supabase/server'
 import { getPairLessons } from '@/lib/mushafLessons'
+import { loadHomeworkItems } from '@/lib/homeworkItems'
 import { MushafSessionView } from '@/components/MushafSessionView'
 
 export default async function StudentMushafPage({
@@ -9,7 +10,7 @@ export default async function StudentMushafPage({
   searchParams,
 }: {
   params: { teacherId: string }
-  searchParams: { booking?: string }
+  searchParams: { booking?: string; page?: string }
 }) {
   const supabase = createServerClient()
   const {
@@ -20,10 +21,11 @@ export default async function StudentMushafPage({
 
   // Independent lookups, fetched together in one round trip. The database refuses to
   // create a shared session for a pair with no booking or conversation.
-  const [{ data: teacher }, result, { lessons, activeBookingId }] = await Promise.all([
+  const [{ data: teacher }, result, { lessons, activeBookingId }, homework] = await Promise.all([
     supabase.from('teacher_profiles').select('id, profiles(full_name)').eq('id', params.teacherId).single(),
     getOrCreateMushafSession(supabase, userId, params.teacherId),
     getPairLessons(supabase, userId, params.teacherId, searchParams.booking),
+    loadHomeworkItems(supabase, { studentId: userId, teacherId: params.teacherId }),
   ])
   if (!teacher || 'error' in result) return notFound()
 
@@ -38,6 +40,8 @@ export default async function StudentMushafPage({
         initialPage={result.session.current_page}
         bookingId={activeBookingId}
         lessons={lessons}
+        openAtPage={Number(searchParams.page) || null}
+        homework={{ items: homework, canTick: true }}
       />
     </main>
   )

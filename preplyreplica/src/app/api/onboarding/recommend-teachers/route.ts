@@ -7,6 +7,7 @@ const querySchema = z.object({
   courses: z.string().optional(),
   weeklySlots: z.string().optional(),
   maxHourlyRate: z.coerce.number().optional(),
+  gender: z.enum(['male', 'female']),
 })
 
 const weeklySlotSchema = z.object({
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
     courses: searchParams.get('courses') ?? undefined,
     weeklySlots: searchParams.get('weeklySlots') ?? undefined,
     maxHourlyRate: searchParams.get('maxHourlyRate') ?? undefined,
+    gender: searchParams.get('gender') ?? undefined,
   })
   if (!parseResult.success) {
     return NextResponse.json({ error: parseResult.error.message }, { status: 400 })
@@ -43,7 +45,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServerClient()
-  const teachers = await fetchRankedTeachers(supabase, { courses, weeklySlots, maxHourlyRate: parseResult.data.maxHourlyRate }, RESULT_LIMIT)
+  const teachers = await fetchRankedTeachers(supabase, { courses, weeklySlots, maxHourlyRate: parseResult.data.maxHourlyRate }, parseResult.data.gender, RESULT_LIMIT)
 
   return NextResponse.json({ teachers })
 }

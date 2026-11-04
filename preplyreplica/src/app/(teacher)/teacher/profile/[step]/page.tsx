@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { loadTeacherProfileState } from '@/lib/teacherProfileState'
+import { getPaymentProvider } from '@/lib/payments'
+import { isTier } from '@/lib/pricing'
 import { PROFILE_STEPS, type ProfileStep } from './steps'
 import { ProfileWizard } from './ProfileWizard'
 
@@ -34,13 +36,17 @@ export default async function TeacherProfilePage({ params }: { params: { step: s
         hourly_rate: teacher.hourly_rate,
         video_url: teacher.video_url,
       }}
-      stripeConnected={teacher.stripe_charges_enabled}
+      payoutsConnected={teacher.payments_enabled}
+      payoutProviderName={getPaymentProvider(teacher.payment_provider).displayName}
+      tier={isTier(teacher.tier) ? teacher.tier : 'starter'}
       live={state.live}
       pending={state.pending}
       changesState={state.changes?.state ?? null}
       reviewNote={state.changes?.review_note ?? null}
       documents={state.documents}
       readiness={state.readiness}
+      phone={state.phone}
+      gender={state.gender}
     />
   )
 }

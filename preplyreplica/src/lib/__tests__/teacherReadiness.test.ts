@@ -8,8 +8,10 @@ const complete: TeacherReadinessInput = {
   languages: ['Arabic'],
   hourly_rate: 20,
   avatar_url: 'https://example.com/me.jpg',
+  phone: '+33612345678',
+  gender: 'female',
   identityDocumentCount: 1,
-  stripe_charges_enabled: true,
+  payments_enabled: true,
 }
 
 describe('getTeacherReadiness', () => {
@@ -19,13 +21,15 @@ describe('getTeacherReadiness', () => {
     expect(readiness.missing).toEqual([])
   })
 
-  const cases: ['profile' | 'photo' | 'identity' | 'payouts', Partial<TeacherReadinessInput>][] = [
+  const cases: ['profile' | 'phone' | 'gender' | 'photo' | 'identity' | 'payouts', Partial<TeacherReadinessInput>][] = [
     ['profile', { bio: 'too short' }],
     ['profile', { subjects: [] }],
     ['profile', { hourly_rate: 5 }],
+    ['phone', { phone: null }],
+    ['gender', { gender: null }],
     ['photo', { avatar_url: null }],
     ['identity', { identityDocumentCount: 0 }],
-    ['payouts', { stripe_charges_enabled: false }],
+    ['payouts', { payments_enabled: false }],
   ]
 
   it.each(cases)('blocks submitting and lists %s when it is missing', (key, change) => {
@@ -43,11 +47,15 @@ describe('getTeacherReadiness', () => {
       languages: [],
       hourly_rate: null,
       avatar_url: null,
+      phone: null,
+      gender: null,
       identityDocumentCount: 0,
-      stripe_charges_enabled: false,
+      payments_enabled: false,
     })
     expect(readiness.missing.map((m) => [m.key, m.href])).toEqual([
       ['profile', '/teacher/profile/details'],
+      ['phone', '/teacher/profile/details'],
+      ['gender', '/teacher/profile/details'],
       ['photo', '/teacher/profile/photo'],
       ['identity', '/teacher/profile/identity'],
       ['payouts', '/teacher/profile/payouts'],

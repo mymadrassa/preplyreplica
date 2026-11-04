@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarPlus, Video, X } from 'lucide-react'
+import { BookOpenCheck, CalendarPlus, Video, X } from 'lucide-react'
 import { BookingActions } from '@/components/BookingActions'
 import { StatusBadge } from '@/components/StatusBadge'
 import { BOOKING_STATUS_LABELS, formatBookingDateTime } from '@/lib/format'
@@ -71,6 +71,15 @@ export function BookingDetailModal({ bookingId, subject, studentName, startAt, e
               <CalendarPlus className="h-4 w-4" aria-hidden="true" /> Add to calendar
             </a>
           </div>
+        ) : null}
+
+        {status === 'completed' || (status === 'confirmed' && hasEnded) ? (
+          <Link
+            href={`/teacher/homework/${bookingId}`}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+          >
+            <BookOpenCheck className="h-4 w-4" aria-hidden="true" /> Homework (cahier de texte)
+          </Link>
         ) : null}
 
         {status === 'pending' || (status === 'confirmed' && hasEnded) ? (

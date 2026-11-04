@@ -134,10 +134,10 @@ export function buildTeacherApprovalSteps({ status, readiness }: { status: Teach
   })
 
   return [
-    step('profile', 'Profile', readiness.profile, 'Bio, subjects and rate saved.', 'Add your bio, subjects and rate.', '/teacher/profile/details'),
+    step('profile', 'Profile', readiness.profile && readiness.phone && readiness.gender, 'Bio, subjects, rate and phone saved.', 'Add your bio, subjects, rate and phone number.', '/teacher/profile/details'),
     step('photo', 'Profile photo', readiness.photo, 'Photo added.', 'Add a clear photo of yourself.', '/teacher/profile/photo'),
     step('identity', 'ID document', readiness.identity, 'ID uploaded.', 'Upload a passport, ID card or licence.', '/teacher/profile/identity'),
-    step('payouts', 'Payouts', readiness.payouts, 'Stripe connected.', 'Connect Stripe to get paid.', '/teacher/profile/payouts'),
+    step('payouts', 'Payouts', readiness.payouts, 'Payouts set up.', 'Set up payouts to get paid.', '/teacher/profile/payouts'),
     submitStep,
     { key: 'review', title: 'Admin review', description: reviewDescription, state: reviewState },
   ]

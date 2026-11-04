@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { rankTeachersForStudent, type StudentSignal, type TeacherSignal } from '@/lib/recommendation'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { canBeMatched } from '@/lib/gender'
+import { isTier, packagePrice } from '@/lib/pricing'
 
 export interface RankedTeacher {
   id: string
@@ -8,6 +11,8 @@ export interface RankedTeacher {
   headline: string | null
   rating_avg: number
   hourly_rate: number
+  /** What a one-hour lesson costs within this teacher's 10-lesson package. */
+  lesson_price: number
   subjects: string[]
   languages: string[]
   status: string
@@ -18,10 +23,24 @@ export interface RankedTeacher {
 // and the signed-in student dashboard's "Recommended for you" section, so
 // both read from the same approved+payable teacher pool and the same
 // scoring logic rather than drifting apart.
-export async function fetchRankedTeachers(supabase: SupabaseClient<Database>, student: StudentSignal, limit = 20): Promise<RankedTeacher[]> {
-  const { data: teachers } = await supabase.from('teacher_profiles').select('*, profiles(*)').eq('status', 'approved').eq('stripe_charges_enabled', true)
+//
+// Only teachers of the student's own gender are eligible. That's a hard
+// filter applied before ranking, not a signal inside the score, so
+// recommendation.ts never sees gender.
+export async function fetchRankedTeachers(
+  supabase: SupabaseClient<Database>,
+  student: StudentSignal,
+  studentGender: string | null,
+  limit = 20
+): Promise<RankedTeacher[]> {
+  if (!studentGender) return []
+  const { data: teachers } = await supabase.from('teacher_profiles').select('*, profiles(*)').eq('status', 'approved').eq('payments_enabled', true)
+  if (!teachers?.length) return []
 
-  const allTeachers = teachers ?? []
+  // Genders are private (profiles RLS is owner-only), so they're read with the server key.
+  const { data: genders } = await createSupabaseServiceRoleClient().from('profiles').select('id, gender').in('id', teachers.map((t) => t.id))
+  const genderOf = new Map((genders ?? []).map((g) => [g.id, g.gender]))
+  const allTeachers = teachers.filter((t) => canBeMatched(studentGender, genderOf.get(t.id)))
   if (!allTeachers.length) return []
 
   const teacherIds = allTeachers.map((t) => t.id)
@@ -53,6 +72,7 @@ export async function fetchRankedTeachers(supabase: SupabaseClient<Database>, st
       headline: teacher.headline,
       rating_avg: Number(teacher.rating_avg),
       hourly_rate: teacher.hourly_rate,
+      lesson_price: packagePrice(teacher.hourly_rate, isTier(teacher.tier) ? teacher.tier : 'starter').perLesson,
       subjects: teacher.subjects,
       languages: teacher.languages,
       status: teacher.status,

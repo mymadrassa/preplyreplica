@@ -7,8 +7,13 @@ import { logClientError } from '@/lib/logClientError'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { PasswordInput } from '@/components/PasswordInput'
-import { FormMessage } from '@/components/FormMessage'
+import { MIN_PASSWORD_LENGTH } from '@/lib/constants'
+import { ConfirmEmailNotice } from '@/components/ConfirmEmailNotice'
 import { useToast } from '@/components/ToastProvider'
+import { normalizePhone, phoneProblem, PHONE_HINT } from '@/lib/phone'
+import { PhoneInput } from '@/components/PhoneInput'
+import { GenderChoice } from '@/components/GenderChoice'
+import type { Gender } from '@/lib/gender'
 
 export default function RegisterPage() {
   return (
@@ -28,17 +33,22 @@ function RegisterForm() {
   const { showToast } = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [phone, setPhone] = useState('')
+  const [gender, setGender] = useState<Gender | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmationNeeded, setConfirmationNeeded] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!normalizePhone(phone)) return showToast('error', phoneProblem(phone) ?? PHONE_HINT)
+    if (password.length < MIN_PASSWORD_LENGTH) return showToast('error', `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
+    if (!gender) return showToast('error', 'Tell us whether you are male or female.')
     setLoading(true)
 
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, password, role, phone, gender }),
     })
     const data = await response.json()
 
@@ -60,13 +70,7 @@ function RegisterForm() {
     }
   }
 
-  if (confirmationNeeded) {
-    return (
-      <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
-        <FormMessage type="success">Check your email to confirm your account, then log in to continue.</FormMessage>
-      </main>
-    )
-  }
+  if (confirmationNeeded) return <ConfirmEmailNotice email={email} />
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
@@ -81,7 +85,14 @@ function RegisterForm() {
       </div>
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
         <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-        <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        <PhoneInput value={phone} onChange={setPhone} help={role === 'teacher' ? 'Private: we contact you on WhatsApp about lessons. Never shown to students.' : 'Your homework is sent to it on WhatsApp. Never shown to your teachers.'} />
+        <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} minChars={MIN_PASSWORD_LENGTH} autoComplete="new-password" required />
+        <div>
+          <GenderChoice value={gender} onChange={setGender} label="Gender" />
+          <p className="mt-2 text-xs text-slate-500">
+            {role === 'teacher' ? 'You’ll teach students of the same gender.' : 'You’ll be matched with teachers of the same gender.'}
+          </p>
+        </div>
         <Button type="submit" loading={loading}>Create account</Button>
       </form>
     </main>

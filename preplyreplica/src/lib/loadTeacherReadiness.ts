@@ -6,7 +6,7 @@ export type TeacherStatus = Database['public']['Tables']['teacher_profiles']['Ro
 
 export interface LoadedTeacherReadiness {
   status: TeacherStatus
-  stripeChargesEnabled: boolean
+  paymentsEnabled: boolean
   readiness: TeacherReadiness
 }
 
@@ -19,10 +19,10 @@ export async function loadTeacherReadiness(supabase: SupabaseClient<Database>, t
   const [{ data: teacher }, { data: profile }, { count }] = await Promise.all([
     supabase
       .from('teacher_profiles')
-      .select('status, headline, bio, subjects, languages, hourly_rate, stripe_charges_enabled')
+      .select('status, headline, bio, subjects, languages, hourly_rate, payments_enabled')
       .eq('id', teacherId)
       .maybeSingle(),
-    supabase.from('profiles').select('avatar_url').eq('id', teacherId).maybeSingle(),
+    supabase.from('profiles').select('avatar_url, phone, gender').eq('id', teacherId).maybeSingle(),
     supabase.from('teacher_documents').select('id', { count: 'exact', head: true }).eq('teacher_id', teacherId).eq('kind', 'identity').or('review_change.is.null,review_change.eq.remove'),
   ])
 
@@ -30,7 +30,7 @@ export async function loadTeacherReadiness(supabase: SupabaseClient<Database>, t
 
   return {
     status: teacher.status,
-    stripeChargesEnabled: teacher.stripe_charges_enabled,
+    paymentsEnabled: teacher.payments_enabled,
     readiness: getTeacherReadiness({
       headline: teacher.headline,
       bio: teacher.bio,
@@ -38,8 +38,10 @@ export async function loadTeacherReadiness(supabase: SupabaseClient<Database>, t
       languages: teacher.languages,
       hourly_rate: teacher.hourly_rate,
       avatar_url: profile?.avatar_url ?? null,
+      phone: profile?.phone ?? null,
+      gender: profile?.gender ?? null,
       identityDocumentCount: count ?? 0,
-      stripe_charges_enabled: teacher.stripe_charges_enabled,
+      payments_enabled: teacher.payments_enabled,
     }),
   }
 }
