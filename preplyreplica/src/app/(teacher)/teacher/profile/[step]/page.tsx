@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { loadTeacherProfileState } from '@/lib/teacherProfileState'
 import { getPaymentProvider } from '@/lib/payments'
+import { syncPayoutStatus } from '@/lib/payments/payoutSetup'
 import { isTier } from '@/lib/pricing'
 import { PROFILE_STEPS, type ProfileStep } from './steps'
 import { ProfileWizard } from './ProfileWizard'
@@ -22,6 +23,13 @@ export default async function TeacherProfilePage({ params }: { params: { step: s
   if (!state) redirect('/teacher/onboarding/subjects')
 
   const { teacher } = state
+  // On the Payouts step, check the provider directly in case its webhook hasn't arrived.
+  if (step === 'payouts' && teacher.payout_account_id && !teacher.payments_enabled) {
+    teacher.payments_enabled = await syncPayoutStatus(teacher)
+    state.readiness.payouts = teacher.payments_enabled
+    if (teacher.payments_enabled) state.readiness.missing = state.readiness.missing.filter((m) => m.key !== 'payouts')
+    state.readiness.canSubmit = state.readiness.missing.length === 0
+  }
   return (
     <ProfileWizard
       step={step}
@@ -42,7 +50,7 @@ export default async function TeacherProfilePage({ params }: { params: { step: s
       live={state.live}
       pending={state.pending}
       changesState={state.changes?.state ?? null}
-      reviewNote={state.changes?.review_note ?? null}
+      reviewNote={teacher.status === 'rejected' ? teacher.review_note : (state.changes?.review_note ?? null)}
       documents={state.documents}
       readiness={state.readiness}
       phone={state.phone}

@@ -63,6 +63,8 @@ export type Database = {
           tier_locked: boolean
           tier_updated_at: string | null
           approved_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
           payments_enabled: boolean
           payouts_enabled: boolean
           status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
@@ -86,6 +88,8 @@ export type Database = {
           tier_locked?: boolean
           tier_updated_at?: string | null
           approved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
           payments_enabled?: boolean
           payouts_enabled?: boolean
           status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
@@ -108,6 +112,8 @@ export type Database = {
           tier_locked?: boolean
           tier_updated_at?: string | null
           approved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
           payments_enabled?: boolean
           payouts_enabled?: boolean
           status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended'
@@ -416,6 +422,9 @@ export type Database = {
           bucket_path: string
           kind: 'identity' | 'certificate'
           review_change: 'add' | 'remove' | null
+          scan_status: 'clean' | 'suspicious' | null
+          scan_detail: string | null
+          scanned_at: string | null
           uploaded_at: string
         }
         Insert: {
@@ -424,6 +433,9 @@ export type Database = {
           bucket_path: string
           kind?: 'identity' | 'certificate'
           review_change?: 'add' | 'remove' | null
+          scan_status?: 'clean' | 'suspicious' | null
+          scan_detail?: string | null
+          scanned_at?: string | null
           uploaded_at?: string
         }
         Update: {
@@ -431,6 +443,9 @@ export type Database = {
           bucket_path?: string
           kind?: 'identity' | 'certificate'
           review_change?: 'add' | 'remove' | null
+          scan_status?: 'clean' | 'suspicious' | null
+          scan_detail?: string | null
+          scanned_at?: string | null
           uploaded_at?: string
         }
         Relationships: [
@@ -885,23 +900,58 @@ export type Database = {
           }
         ]
       }
+      support_threads: {
+        Row: {
+          id: string
+          user_id: string
+          user_last_read_at: string | null
+          admin_last_read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          user_last_read_at?: string | null
+          admin_last_read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          user_last_read_at?: string | null
+          admin_last_read_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'support_threads_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       messages: {
         Row: {
           id: string
-          conversation_id: string
+          conversation_id: string | null
+          support_thread_id: string | null
           sender_id: string
           body: string
           created_at: string
         }
         Insert: {
           id?: string
-          conversation_id: string
+          conversation_id?: string | null
+          support_thread_id?: string | null
           sender_id: string
           body: string
           created_at?: string
         }
         Update: {
-          conversation_id?: string
+          conversation_id?: string | null
+          support_thread_id?: string | null
           sender_id?: string
           body?: string
           created_at?: string

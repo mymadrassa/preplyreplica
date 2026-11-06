@@ -1,6 +1,7 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(admin)/dashboard/page.tsx
-import { diffProfileChanges } from '@/lib/profileEditing'
-import { reviewedValuesOf } from '@/lib/teacherProfileState'
+import { submittedChangeFields } from '@/lib/adminTeacherReview'
+import { scanUncheckedDocuments } from '@/lib/documentScan'
+import { usersWithUnreadReplies } from '@/lib/support'
 import Link from 'next/link'
 import { CalendarCheck, GraduationCap, Search, TrendingUp, UserCog, Users as UsersIcon, Wallet, Banknote } from 'lucide-react'
 import type { Database } from '@/types/database'
@@ -14,7 +15,7 @@ import { AdminPayoutConfirmCard } from '@/components/AdminPayoutConfirmCard'
 import { EarningsTrendChart } from '@/components/EarningsTrendChart'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatBookingDateTime } from '@/lib/format'
-import { isTier, toPounds } from '@/lib/pricing'
+import { toPounds } from '@/lib/pricing'
 
 type PaymentRow = Database['public']['Tables']['payments']['Row']
 type TeacherDocument = Database['public']['Tables']['teacher_documents']['Row']
@@ -27,31 +28,6 @@ type TeacherProfileWithRelations = Database['public']['Tables']['teacher_profile
 }
 
 /** A live teacher's edits that are submitted and waiting for the admin, as before/after pairs. */
-function submittedChanges(teacher: TeacherProfileWithRelations) {
-  const raw = teacher.teacher_profile_changes
-  const changes = Array.isArray(raw) ? raw[0] : raw
-  if (!changes || changes.state !== 'submitted') return null
-  const fields: { field: string; label: string; before: unknown; after: unknown }[] = diffProfileChanges(
-    reviewedValuesOf(teacher, teacher.profiles?.avatar_url ?? null),
-    {
-      headline: changes.headline,
-      bio: changes.bio,
-      subjects: changes.subjects,
-      languages: changes.languages,
-      video_url: changes.video_url,
-      avatar_url: changes.avatar_url,
-    }
-  )
-  // ID documents changed after approval are reviewed with the rest.
-  const docs = teacher.teacher_documents ?? []
-  const fileName = (path: string) => path.split('/').pop()?.replace(/^\d+-/, '') ?? path
-  const removed = docs.filter((d) => d.review_change === 'remove').map((d) => fileName(d.bucket_path))
-  const added = docs.filter((d) => d.review_change === 'add').map((d) => fileName(d.bucket_path))
-  if (removed.length || added.length) {
-    fields.push({ field: 'identity', label: 'ID document (open it in the documents list below)', before: removed, after: added })
-  }
-  return fields
-}
 
 const TEACHER_STATUSES = ['draft', 'approved', 'pending', 'rejected', 'suspended'] as const
 const PAGE_SIZE = 20
@@ -124,7 +100,11 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       .order('teacher_confirmed_at', { ascending: true }),
   ])
 
-  const allTeachers = ((teachersRaw as TeacherProfileWithRelations[] | null) ?? []).filter((teacher) => status !== 'changes' || submittedChanges(teacher))
+  const changesOf = (teacher: TeacherProfileWithRelations) => {
+    const raw = teacher.teacher_profile_changes
+    return submittedChangeFields(teacher, teacher.profiles?.avatar_url ?? null, Array.isArray(raw) ? raw[0] : raw, teacher.teacher_documents ?? [])
+  }
+  const allTeachers = ((teachersRaw as TeacherProfileWithRelations[] | null) ?? []).filter((teacher) => status !== 'changes' || changesOf(teacher))
 
   const normalizedQuery = q.trim().toLowerCase()
   const filteredTeachers = normalizedQuery
@@ -163,15 +143,13 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   const currentPage = Math.min(page, totalPages)
   const pageTeachers = sortedTeachers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_TEACHER_DOCS || 'teacher-documents'
+  const unreadReplies = await usersWithUnreadReplies(pageTeachers.map((t) => t.id))
   const teacherRows: AdminTeacherRow[] = await Promise.all(
     pageTeachers.map(async (teacher) => {
-      const documentUrls = await Promise.all(
-        (teacher.teacher_documents ?? []).map(async (doc) => {
-          const { data } = await supabase.storage.from(bucket).createSignedUrl(doc.bucket_path, 3600)
-          return { name: doc.bucket_path.split('/').pop() || doc.bucket_path, url: data?.signedUrl || '', kind: doc.kind ?? 'identity', reviewChange: doc.review_change ?? null }
-        })
-      )
+      // Older files get their safety check here, so a suspicious one is flagged in the list.
+      const docs = teacher.teacher_documents ?? []
+      const scanned = await scanUncheckedDocuments(docs)
+      const suspiciousDocuments = docs.filter((d) => (scanned.get(d.id)?.status ?? d.scan_status) === 'suspicious').length
       const payments = (teacher.bookings ?? []).flatMap((booking) => booking.payments ?? [])
       const awaitingPayoutPence = payments.filter((p) => p.status === 'succeeded' && !p.payout_at).reduce((sum, p) => sum + p.teacher_fee, 0)
       const paidOutPence = payments.filter((p) => p.status === 'succeeded' && p.payout_at).reduce((sum, p) => sum + p.teacher_fee, 0)
@@ -180,23 +158,14 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         id: teacher.id,
         name: teacher.profiles?.full_name || teacher.profiles?.email || 'Teacher',
         email: teacher.profiles?.email ?? null,
-        gender: teacher.profiles?.gender ?? null,
         avatarUrl: teacher.profiles?.avatar_url ?? null,
-        headline: teacher.headline,
-        bio: teacher.bio,
-        subjects: teacher.subjects ?? [],
-        languages: teacher.languages ?? [],
-        hourlyRate: teacher.hourly_rate,
-        paymentsEnabled: teacher.payments_enabled,
-        tier: isTier(teacher.tier) ? teacher.tier : 'starter',
-        tierLocked: teacher.tier_locked,
-        videoUrl: teacher.video_url,
-        documentUrls,
         status: teacher.status,
         createdAt: teacher.created_at,
         awaitingPayoutPence,
         paidOutPence,
-        pendingChanges: submittedChanges(teacher),
+        hasPendingChanges: !!changesOf(teacher)?.length,
+        suspiciousDocuments,
+        hasUnreadReply: unreadReplies.has(teacher.id),
       }
     })
   )

@@ -1,32 +1,25 @@
 import Link from 'next/link'
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, ShieldAlert } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 import { StatusBadge } from '@/components/StatusBadge'
-import { AdminTeacherRowActions } from '@/components/AdminTeacherRowActions'
-import { toPounds, type Tier } from '@/lib/pricing'
+import { ClickableRow } from '@/components/admin/ClickableRow'
+import { toPounds } from '@/lib/pricing'
 
 export interface AdminTeacherRow {
   id: string
   name: string
   email: string | null
-  gender: string | null
   avatarUrl: string | null
-  headline: string | null
-  bio: string | null
-  subjects: string[]
-  languages: string[]
-  hourlyRate: number
-  paymentsEnabled: boolean
-  tier: Tier
-  tierLocked: boolean
-  videoUrl: string | null
-  documentUrls: { name: string; url: string; kind?: 'identity' | 'certificate'; reviewChange?: 'add' | 'remove' | null }[]
   status: string
   createdAt: string | null
   awaitingPayoutPence: number
   paidOutPence: number
-  /** Submitted edits to a live profile, waiting for the admin; null when there are none. */
-  pendingChanges: { field: string; label: string; before: unknown; after: unknown }[] | null
+  /** Submitted edits to a live profile wait for the admin. */
+  hasPendingChanges: boolean
+  /** Documents that failed the safety check: the admin is warned right in the list. */
+  suspiciousDocuments: number
+  /** The teacher wrote in their Admin conversation since an admin last opened it. */
+  hasUnreadReply: boolean
 }
 
 type SortBy = 'name' | 'created_at' | 'status'
@@ -93,7 +86,7 @@ export function AdminTeachersTable({ rows, page, pageSize, totalCount, sortBy, s
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((row) => (
-              <tr key={row.id} className="align-middle transition-colors hover:bg-slate-50">
+              <ClickableRow key={row.id} href={`/admin/teachers/${row.id}`} className="align-middle transition-colors hover:bg-slate-50">
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className="flex items-center gap-2.5">
                     <Avatar name={row.name} avatarUrl={row.avatarUrl} />
@@ -106,8 +99,16 @@ export function AdminTeachersTable({ rows, page, pageSize, totalCount, sortBy, s
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <StatusBadge status={row.status} />
-                    {row.pendingChanges?.length ? (
+                    {row.hasPendingChanges ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">Changes to review</span>
+                    ) : null}
+                    {row.hasUnreadReply ? (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">New reply</span>
+                    ) : null}
+                    {row.suspiciousDocuments ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-800">
+                        <ShieldAlert className="h-3 w-3" aria-hidden="true" /> Suspicious file
+                      </span>
                     ) : null}
                   </span>
                 </td>
@@ -122,29 +123,15 @@ export function AdminTeachersTable({ rows, page, pageSize, totalCount, sortBy, s
                     <span className="text-slate-400">No payments yet</span>
                   )}
                 </td>
-                <td className="px-4 py-3">
-                  <AdminTeacherRowActions
-                    teacherId={row.id}
-                    name={row.name}
-                    email={row.email}
-                    gender={row.gender}
-                    avatarUrl={row.avatarUrl}
-                    headline={row.headline}
-                    bio={row.bio}
-                    subjects={row.subjects}
-                    languages={row.languages}
-                    hourlyRate={row.hourlyRate}
-                    paymentsEnabled={row.paymentsEnabled}
-                    tier={row.tier}
-                    tierLocked={row.tierLocked}
-                    videoUrl={row.videoUrl}
-                    documentUrls={row.documentUrls}
-                    status={row.status}
-                    createdAt={row.createdAt}
-                    pendingChanges={row.pendingChanges}
-                  />
+                <td className="px-4 py-3 text-right">
+                  <Link
+                    href={`/admin/teachers/${row.id}`}
+                    className="inline-flex items-center rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-white"
+                  >
+                    View profile
+                  </Link>
                 </td>
-              </tr>
+              </ClickableRow>
             ))}
           </tbody>
         </table>

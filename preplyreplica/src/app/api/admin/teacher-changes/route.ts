@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { loadTeacherProfileState, pendingDocumentChanges, removeAvatarFile } from '@/lib/teacherProfileState'
+import { sendAdminMessage } from '@/lib/support'
 
 const schema = z.object({
   teacherId: z.string().uuid(),
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
       .update({ state: 'draft', review_note: note?.trim() || null, updated_at: new Date().toISOString() })
       .eq('teacher_id', teacherId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (note?.trim()) await sendAdminMessage(teacherId, userId, `Your profile changes weren’t approved:\n${note.trim()}`)
     return NextResponse.json({ rejected: true })
   }
 
@@ -88,5 +90,6 @@ export async function POST(request: Request) {
   }
 
   revalidateTag(TEACHER_CATALOGUE_TAG)
+  await sendAdminMessage(teacherId, userId, 'Your profile changes have been approved and are now live.')
   return NextResponse.json({ approved: true })
 }

@@ -33,7 +33,7 @@ export default async function TeacherConversationPage({ params }: { params: { co
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back to messages
       </Link>
-      <ChatThread conversationId={conversation.id} currentUserId={userId} otherPartyName={conversation.profiles?.full_name ?? 'Student'} />
+      <ChatThread target={{ kind: 'conversation', id: conversation.id }} currentUserId={userId} otherPartyName={conversation.profiles?.full_name ?? 'Student'} />
     </main>
   )
 }

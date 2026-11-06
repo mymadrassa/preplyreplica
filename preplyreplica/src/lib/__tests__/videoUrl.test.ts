@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeVideoUrl } from '../videoUrl'
+import { normalizeVideoUrl, watchUrlFor } from '../videoUrl'
 
 describe('normalizeVideoUrl', () => {
   it('rewrites a YouTube watch link to its embed form', () => {
@@ -53,5 +53,14 @@ describe('normalizeVideoUrl', () => {
   it('returns null for an empty or whitespace-only string', () => {
     expect(normalizeVideoUrl('')).toBeNull()
     expect(normalizeVideoUrl('   ')).toBeNull()
+  })
+})
+
+describe('watchUrlFor', () => {
+  it('turns stored embed links back into the host page', () => {
+    expect(watchUrlFor('https://www.youtube.com/embed/dQw4w9WgXcQ')).toEqual({ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', host: 'YouTube' })
+    expect(watchUrlFor('https://player.vimeo.com/video/123456')).toEqual({ url: 'https://vimeo.com/123456', host: 'Vimeo' })
+    expect(watchUrlFor('https://drive.google.com/file/d/abc_123/preview')).toEqual({ url: 'https://drive.google.com/file/d/abc_123/view', host: 'Google Drive' })
+    expect(watchUrlFor('https://x.supabase.co/storage/v1/object/public/teacher-videos/u/1.mp4')).toBeNull()
   })
 })

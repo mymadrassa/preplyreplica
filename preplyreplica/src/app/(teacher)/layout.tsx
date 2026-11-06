@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/studio/AppShell'
 import type { AppNotification } from '@/components/NotificationBell'
 import { loadFeedbackDue } from '@/lib/loadFeedbackDue'
+import { unreadFromAdmin } from '@/lib/support'
 import type { FeedbackPromptData } from '@/lib/sessionFeedback'
 import { diffProfileChanges } from '@/lib/profileEditing'
 import { loadTeacherProfileState, type TeacherProfileState } from '@/lib/teacherProfileState'
@@ -20,7 +21,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   let needsGender = false
 
   if (session?.user?.id) {
-    const [{ data: profile }, state, { data: finished }, due, { data: feedback }] = await Promise.all([
+    const [{ data: profile }, state, { data: finished }, due, { data: feedback }, adminUnread] = await Promise.all([
       supabase.from('profiles').select('full_name, email, avatar_url, gender').eq('id', session.user.id).single(),
       loadTeacherProfileState(supabase, session.user.id),
       supabase
@@ -40,12 +41,16 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         .is('recipient_seen_at', null)
         .order('created_at', { ascending: false })
         .limit(10),
+      unreadFromAdmin(session.user.id),
     ])
     feedbackPrompt = due
     userName = profile?.full_name || profile?.email?.split('@')[0] || null
     avatarUrl = profile?.avatar_url ?? null
     needsGender = !!profile && !profile.gender
     notifications = [
+      ...(adminUnread
+        ? [{ id: 'admin-message', title: `New message from Admin`, description: adminUnread === 1 ? 'Our team sent you a message.' : `Our team sent you ${adminUnread} messages.`, href: '/teacher/messages/admin' }]
+        : []),
       ...teacherNotifications(state),
       ...(finished ?? []).map((entry) => ({
         id: `homework-done-${entry.id}`,
@@ -79,6 +84,16 @@ function teacherNotifications(state: TeacherProfileState | null): AppNotificatio
 
   const { readiness, teacher, changes, live, pending } = state
   const items: AppNotification[] = readiness.missing.map((item) => ({ id: item.key, title: item.title, description: item.description, href: item.href }))
+
+  // Not approved: the admin's message comes first.
+  if (teacher.status === 'rejected' && teacher.review_note) {
+    items.unshift({
+      id: 'not-approved',
+      title: 'Your profile wasn’t approved yet',
+      description: teacher.review_note.length > 140 ? `${teacher.review_note.slice(0, 140)}…` : teacher.review_note,
+      href: '/teacher/profile/review',
+    })
+  }
 
   if (readiness.canSubmit && (teacher.status === 'draft' || teacher.status === 'rejected')) {
     items.push({

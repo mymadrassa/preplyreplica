@@ -9,6 +9,7 @@ import { ApprovalTimeline, buildTeacherApprovalSteps } from '@/components/Approv
 import { getTeacherReadiness } from '@/lib/teacherReadiness'
 import { PayoutSetupSuccessBanner } from '@/components/PayoutSetupSuccessBanner'
 import { getPaymentProvider } from '@/lib/payments'
+import { syncPayoutStatus } from '@/lib/payments/payoutSetup'
 import { TierProgress } from '@/components/TierProgress'
 import { isTier } from '@/lib/pricing'
 import { nextTierProgress } from '@/lib/tiers'
@@ -38,6 +39,12 @@ export default async function TeacherDashboardPage({
 
   if (!teacher) {
     redirect('/teacher/onboarding')
+  }
+
+  // Back from the provider's payout setup: read the account's status directly
+  // rather than waiting for its webhook, so the step turns green straight away.
+  if (searchParams.payouts_setup === 'success' && !teacher.payments_enabled) {
+    teacher.payments_enabled = await syncPayoutStatus(teacher)
   }
 
   // The approval timeline stays visible (all-green) for exactly one visit

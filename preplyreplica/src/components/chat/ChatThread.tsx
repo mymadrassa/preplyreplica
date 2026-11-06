@@ -13,15 +13,28 @@ interface Message {
   created_at: string
 }
 
+/**
+ * Where the messages live: a student–teacher conversation, or a user's
+ * thread with the team ("Admin"). In a team thread every admin writes on the
+ * same side, so `viewer` says which side the current user is on.
+ */
+export type ChatTarget =
+  | { kind: 'conversation'; id: string }
+  | { kind: 'support'; id: string; threadUserId: string; viewer: 'user' | 'admin' }
+
 export function ChatThread({
-  conversationId,
+  target,
   currentUserId,
   otherPartyName,
 }: {
-  conversationId: string
+  target: ChatTarget
   currentUserId: string
   otherPartyName: string
 }) {
+  const column = target.kind === 'conversation' ? 'conversation_id' : 'support_thread_id'
+  const targetId = target.id
+  const isMine = (senderId: string) =>
+    target.kind === 'support' && target.viewer === 'admin' ? senderId !== target.threadUserId : senderId === currentUserId
   const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -35,7 +48,7 @@ export function ChatThread({
     supabase
       .from('messages')
       .select('id, sender_id, body, created_at')
-      .eq('conversation_id', conversationId)
+      .eq(column, targetId)
       .order('created_at', { ascending: true })
       .then(({ data }) => {
         if (isMounted) setMessages(data ?? [])
@@ -47,10 +60,10 @@ export function ChatThread({
     // also receives their own insert through this channel, so no local
     // optimistic append is needed.
     const channel = supabase
-      .channel(`conversation:${conversationId}`)
+      .channel(`${column}:${targetId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `${column}=eq.${targetId}` },
         (payload) => {
           const next = payload.new as Message
           setMessages((prev) => (prev.some((m) => m.id === next.id) ? prev : [...prev, next]))
@@ -62,7 +75,7 @@ export function ChatThread({
       isMounted = false
       supabase.removeChannel(channel)
     }
-  }, [conversationId, supabase])
+  }, [column, targetId, supabase])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -74,7 +87,8 @@ export function ChatThread({
     if (!body || sending) return
 
     setSending(true)
-    const { error } = await supabase.from('messages').insert({ conversation_id: conversationId, sender_id: currentUserId, body })
+    const channelField = target.kind === 'conversation' ? { conversation_id: targetId } : { support_thread_id: targetId }
+    const { error } = await supabase.from('messages').insert({ ...channelField, sender_id: currentUserId, body })
     setSending(false)
     if (!error) setDraft('')
   }
@@ -90,13 +104,13 @@ export function ChatThread({
           <LoadingBlock label="Loading conversation…" />
         ) : messages.length ? (
           messages.map((message) => {
-            const isMine = message.sender_id === currentUserId
+            const mine = isMine(message.sender_id)
             return (
-              <div key={message.id} className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
-                {!isMine ? <Avatar name={otherPartyName} size="sm" /> : null}
+              <div key={message.id} className={`flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
+                {!mine ? <Avatar name={otherPartyName} size="sm" /> : null}
                 <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
-                    isMine ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-900'
+                  className={`max-w-[75%] whitespace-pre-line rounded-2xl px-4 py-2 text-sm ${
+                    mine ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-900'
                   }`}
                 >
                   {message.body}

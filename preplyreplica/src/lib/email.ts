@@ -389,3 +389,18 @@ export async function sendPasswordResetEmail({ to, resetUrl }: { to: string; res
     `
   )
 }
+
+/** The admin didn't approve the teacher's profile: what to fix, then resubmit. */
+export async function sendTeacherNotApprovedEmail({ to, teacherName, message, profileUrl }: { to: string; teacherName: string; message: string; profileUrl: string }) {
+  await sendEmail(
+    to,
+    'Your teacher profile needs a few changes',
+    `
+      <p>Assalamu alaykum ${escapeHtml(teacherName)},</p>
+      <p>Thank you for submitting your profile. Our team reviewed it and it can't be approved yet:</p>
+      <div style="white-space:pre-line;border-left:3px solid #f59e0b;padding:8px 12px;background:#fffbeb">${escapeHtml(message)}</div>
+      <p>Once it's done, submit your profile again from your Profile page.</p>
+      <p><a href="${profileUrl}">Open my profile</a></p>
+    `
+  )
+}

@@ -54,6 +54,11 @@ export const stripeProvider: PaymentProvider = {
     return { accountId: account.id }
   },
 
+  async getPayeeStatus(accountId) {
+    const account = await stripe().accounts.retrieve(accountId)
+    return { paymentsEnabled: account.charges_enabled, payoutsEnabled: account.payouts_enabled }
+  },
+
   async createPayeeOnboardingLink(accountId, { returnUrl, refreshUrl }) {
     const link = await stripe().accountLinks.create({ account: accountId, refresh_url: refreshUrl, return_url: returnUrl, type: 'account_onboarding' })
     return { url: link.url }

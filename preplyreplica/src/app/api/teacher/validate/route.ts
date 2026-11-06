@@ -4,12 +4,17 @@ import { revalidateTag } from 'next/cache'
 import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
-import { sendTeacherApprovedEmail } from '@/lib/email'
+import { sendTeacherApprovedEmail, sendTeacherNotApprovedEmail } from '@/lib/email'
+import { scanUncheckedDocuments } from '@/lib/documentScan'
+import { sendAdminMessage } from '@/lib/support'
 import { loadTeacherReadiness } from '@/lib/loadTeacherReadiness'
+import { appUrl } from '@/lib/appUrl'
 
 const validationSchema = z.object({
   teacherId: z.string().uuid(),
   action: z.enum(['approve', 'reject', 'suspend', 'reset']),
+  /** Shown to the teacher (and emailed on a rejection): what to fix, automatic or written by the admin. */
+  note: z.string().trim().max(2000).optional(),
 })
 
 const statusByAction: Record<string, 'approved' | 'rejected' | 'suspended' | 'pending'> = {
@@ -39,6 +44,10 @@ export async function POST(request: Request) {
   }
 
   const status = statusByAction[parseResult.data.action]
+  const note = parseResult.data.note || null
+  if (status === 'rejected' && !note) {
+    return NextResponse.json({ error: 'Tell the teacher what to fix: keep the automatic message or write your own.' }, { status: 400 })
+  }
 
   // Approval needs a profile the teacher has actually submitted, with every
   // mandatory step done -- the same rule the teacher's own "Submit" button
@@ -65,6 +74,13 @@ export async function POST(request: Request) {
     if (!readiness.profile) {
       return NextResponse.json({ error: "This teacher's profile is incomplete." }, { status: 409 })
     }
+    // Never approve over a document that failed its safety check.
+    const { data: documents } = await supabase.from('teacher_documents').select('id, bucket_path, scan_status').eq('teacher_id', parseResult.data.teacherId)
+    const scanned = await scanUncheckedDocuments(documents ?? [])
+    const suspicious = (documents ?? []).filter((d) => (scanned.get(d.id)?.status ?? d.scan_status) === 'suspicious')
+    if (suspicious.length) {
+      return NextResponse.json({ error: 'A document failed its safety check. Ask the teacher to upload it again (Reject with a message) before approving.' }, { status: 409 })
+    }
   }
 
   // Reset approval_seen_at whenever status changes away from approved (reject/suspend/reset),
@@ -72,7 +88,7 @@ export async function POST(request: Request) {
   // seen the all-green timeline on their dashboard, which is what triggers the congratulations email below.
   const { error } = await supabase
     .from('teacher_profiles')
-    .update({ status, approval_seen_at: null })
+    .update({ status, approval_seen_at: null, review_note: status === 'approved' ? null : note, reviewed_at: new Date().toISOString() })
     .eq('id', parseResult.data.teacherId)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -94,7 +110,30 @@ export async function POST(request: Request) {
       await sendTeacherApprovedEmail({
         to: teacherProfile.email,
         teacherName: teacherProfile.full_name || 'there',
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/teacher/dashboard`,
+        dashboardUrl: appUrl('/teacher/dashboard'),
+      })
+    }
+  }
+
+  // Every decision the teacher should know about also lands in their Admin conversation (with a bell notification).
+  if (status === 'approved') {
+    await sendAdminMessage(
+      parseResult.data.teacherId,
+      userId,
+      'Congratulations! Your profile has been approved and is now visible to students. You can see your bookings and set your availability from your dashboard.'
+    )
+  } else if (note) {
+    await sendAdminMessage(parseResult.data.teacherId, userId, note)
+  }
+  if (status === 'rejected' && note) {
+    const { data: teacher } = await supabase.from('teacher_profiles').select('profiles(email, full_name)').eq('id', parseResult.data.teacherId).single()
+    const contact = teacher?.profiles as { email: string | null; full_name: string | null } | null
+    if (contact?.email) {
+      await sendTeacherNotApprovedEmail({
+        to: contact.email,
+        teacherName: contact.full_name || 'there',
+        message: note,
+        profileUrl: appUrl('/teacher/profile/review'),
       })
     }
   }

@@ -2,6 +2,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { sendHomeworkEmail } from '@/lib/email'
 import { homeworkParts, rangeFromRow, type SurahMeta } from '@/lib/homework'
 import { getSurahs } from '@/lib/surahs'
+import { appUrl } from '@/lib/appUrl'
 
 // Sends a lesson's cahier de texte entry to the student: WhatsApp first (Meta
 // Cloud API, approved template), email when the student has no phone, when
@@ -62,7 +63,7 @@ async function sendEmailCopy(homeworkId: string, recipient: Recipient, updated: 
     revision: recipient.parts.revision,
     memorization: recipient.parts.memorization,
     note: recipient.parts.note,
-    homeworkUrl: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/student/homework`,
+    homeworkUrl: appUrl('/student/homework'),
     updated,
   })
   await admin

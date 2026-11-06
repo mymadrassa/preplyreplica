@@ -1,4 +1,6 @@
+import { revalidateTag } from 'next/cache'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { TEACHER_CATALOGUE_TAG } from '@/lib/teacherCatalogue'
 import { getPaymentProvider } from './index'
 
 /**
@@ -29,4 +31,28 @@ export async function startPayoutSetup(
 
 export async function savePayoutAccount(teacherId: string, accountId: string, providerId: string) {
   await createSupabaseServiceRoleClient().from('teacher_profiles').update({ payout_account_id: accountId, payment_provider: providerId }).eq('id', teacherId)
+}
+
+/**
+ * Refreshes a teacher's payout status straight from the provider, for when
+ * they come back from its onboarding page. The webhook does the same, but it
+ * can arrive late, or never in local development (the provider can't reach
+ * localhost). Returns whether the account can take payments now.
+ */
+export async function syncPayoutStatus(teacher: { id: string; payout_account_id: string | null; payment_provider: string | null; payments_enabled: boolean; payouts_enabled: boolean }) {
+  if (!teacher.payout_account_id) return teacher.payments_enabled
+  try {
+    const status = await getPaymentProvider(teacher.payment_provider).getPayeeStatus(teacher.payout_account_id)
+    if (status.paymentsEnabled !== teacher.payments_enabled || status.payoutsEnabled !== teacher.payouts_enabled) {
+      await createSupabaseServiceRoleClient()
+        .from('teacher_profiles')
+        .update({ payments_enabled: status.paymentsEnabled, payouts_enabled: status.payoutsEnabled })
+        .eq('id', teacher.id)
+      revalidateTag(TEACHER_CATALOGUE_TAG)
+    }
+    return status.paymentsEnabled
+  } catch {
+    // Provider unreachable: keep what we had; the webhook will catch up.
+    return teacher.payments_enabled
+  }
 }

@@ -12,14 +12,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { RatingStars } from '@/components/RatingStars'
 import { ChatButton } from '@/components/chat/ChatButton'
 import { Avatar } from '@/components/Avatar'
-
-// A directly uploaded file (public Supabase Storage URL, e.g. .../video.mp4)
-// plays via the native <video> element; anything else is assumed to be an
-// external embed link (YouTube, Vimeo, ...) and needs an <iframe>.
-const VIDEO_FILE_EXTENSION = /\.(mp4|webm|mov|ogg)(\?.*)?$/i
-function isDirectVideoFile(url: string) {
-  return VIDEO_FILE_EXTENSION.test(url)
-}
+import { IntroVideo } from '@/components/IntroVideo'
 
 interface TeacherPageProps {
   params: {
@@ -140,21 +133,7 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
               </div>
             </div>
           </div>
-          {shown.video_url ? (
-            <div className="rounded-3xl overflow-hidden border border-slate-200 bg-slate-950">
-              {isDirectVideoFile(shown.video_url) ? (
-                <video controls className="h-72 w-full" src={shown.video_url} />
-              ) : (
-                <iframe
-                  className="h-72 w-full"
-                  src={shown.video_url}
-                  title="Teacher introduction"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              )}
-            </div>
-          ) : null}
+          {shown.video_url ? <IntroVideo url={shown.video_url} /> : null}
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold text-slate-900">Reviews</h2>

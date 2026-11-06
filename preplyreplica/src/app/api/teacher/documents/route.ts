@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { loadTeacherProfileState, saveToPendingCopy, type TeacherProfileState } from '@/lib/teacherProfileState'
 import { verifyUpload } from '@/lib/verifyUpload'
+import { recordScan } from '@/lib/documentScan'
 
 const documentSchema = z.object({
   bucket_path: z.string().min(3).max(500),
@@ -72,6 +73,8 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  // It passed verifyUpload above, so the admin sees it as checked.
+  await recordScan(data.id, 'clean', null)
 
   // The new document is saved first, so a failure never leaves the teacher with nothing.
   if (replaces) {

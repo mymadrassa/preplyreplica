@@ -61,6 +61,8 @@ export interface PaymentProvider {
   // Teacher payout accounts
   createPayeeAccount(input: { email: string; country?: string }): Promise<{ accountId: string }>
   createPayeeOnboardingLink(accountId: string, urls: { returnUrl: string; refreshUrl: string }): Promise<{ url: string }>
+  /** Asks the provider directly whether the account can take payments and pay out (no webhook needed). */
+  getPayeeStatus(accountId: string): Promise<{ paymentsEnabled: boolean; payoutsEnabled: boolean }>
 
   // Booking payments: authorized at checkout, captured when the teacher accepts
   createCheckout(input: CheckoutInput): Promise<CheckoutResult>

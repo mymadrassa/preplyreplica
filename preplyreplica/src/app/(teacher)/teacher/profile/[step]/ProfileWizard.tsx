@@ -173,6 +173,19 @@ function ModeBanner({
   hasChanges: boolean
   reviewNote: string | null
 }) {
+  // Not approved: the admin's message says what to fix before resubmitting.
+  if (status === 'rejected' && reviewNote) {
+    return (
+      <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+        <div>
+          <p className="font-semibold">Your profile wasn&apos;t approved yet. Message from our team:</p>
+          <p className="mt-1 whitespace-pre-line">{reviewNote}</p>
+          <p className="mt-2 text-red-800">Make these changes, then submit your profile again from the Review step.</p>
+        </div>
+      </div>
+    )
+  }
   if (mode === 'locked') {
     return (
       <div className="flex flex-col gap-3 rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">

@@ -35,3 +35,18 @@ export function normalizeVideoUrl(raw: string): NormalizedVideoUrl | null {
 
   return null
 }
+
+/**
+ * The normal page to watch a stored embed link on its host. An embed link
+ * (youtube.com/embed/…) only plays inside a page: opened on its own, YouTube
+ * refuses it ("Error 153") because it can't tell which site embeds it.
+ */
+export function watchUrlFor(embedUrl: string): { url: string; host: string } | null {
+  const youtube = /^https:\/\/www\.youtube\.com\/embed\/([a-zA-Z0-9_-]+)/.exec(embedUrl)
+  if (youtube) return { url: `https://www.youtube.com/watch?v=${youtube[1]}`, host: 'YouTube' }
+  const vimeo = /^https:\/\/player\.vimeo\.com\/video\/(\d+)/.exec(embedUrl)
+  if (vimeo) return { url: `https://vimeo.com/${vimeo[1]}`, host: 'Vimeo' }
+  const drive = /^https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)\/preview/.exec(embedUrl)
+  if (drive) return { url: `https://drive.google.com/file/d/${drive[1]}/view`, host: 'Google Drive' }
+  return null
+}
