@@ -1,7 +1,8 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/app/(student)/bookings/page.tsx
 import Link from 'next/link'
 import { ArrowLeft, CalendarPlus, Video } from 'lucide-react'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { syncCheckout } from '@/lib/payments/handleEvent'
 import { Input } from '@/components/Input'
 import { Select } from '@/components/Select'
 import { Button } from '@/components/Button'
@@ -9,13 +10,16 @@ import { CancelBookingButton } from '@/components/CancelBookingButton'
 import { PendingPaymentRefresher } from '@/components/PendingPaymentRefresher'
 import { RatingStars } from '@/components/RatingStars'
 import { FeedbackTags } from '@/components/FeedbackTags'
-import { GiveFeedbackButton } from '@/components/SessionFeedbackPrompt'
+import { GiveFeedbackButton, ReportProblemButton } from '@/components/SessionFeedbackPrompt'
+import { reportStatusLabel } from '@/lib/lessonReports'
 import { MarkFeedbackSeen } from '@/components/MarkFeedbackSeen'
 import { StudentPackages } from '@/components/StudentPackages'
 import { lessonsLeft } from '@/lib/packages'
 import { toPounds } from '@/lib/pricing'
+import { formatPageRanges, pagesByBooking } from '@/lib/lessonPages'
 import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
 import { CANCELLATION_CUTOFF_HOURS } from '@/lib/constants'
+import { loadParticipants } from '@/lib/participantNames'
 
 const FILTERS: Record<string, string[] | null> = {
   all: null,
@@ -62,11 +66,21 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
     )
   }
 
-  const [{ data: allBookings }, { data: feedbackRows }, { data: packageRows }] = await Promise.all([
+  // Back from a package checkout: settle the payment now rather than waiting for the webhook.
+  if (searchParams.package && /^[0-9a-f-]{36}$/.test(searchParams.package)) {
+    const { data: bought } = await supabase.from('lesson_packages').select('status, provider, provider_checkout_id, teacher_id, charge_model').eq('id', searchParams.package).eq('student_id', userId).maybeSingle()
+    if (bought?.status === 'pending_payment') {
+      const { data: payee } = await createSupabaseServiceRoleClient().from('teacher_profiles').select('payout_account_id').eq('id', bought.teacher_id).maybeSingle()
+      await syncCheckout({ providerId: bought.provider, checkoutId: bought.provider_checkout_id, payeeAccountId: bought.charge_model === 'platform' ? null : (payee?.payout_account_id ?? null) })
+    }
+  }
+
+  const [{ data: allBookings }, { data: feedbackRows }, { data: packageRows }, { data: reportRows }] = await Promise.all([
     supabase.from('bookings').select('*, teacher_profiles(*, profiles(*))').eq('student_id', userId).order('start_at', { ascending: false }),
     // Mine about each lesson, and the teacher's tags about it.
     supabase.from('session_feedback').select('booking_id, author_id, status, rating, visibility, tags, recipient_seen_at').or(`author_id.eq.${userId},recipient_id.eq.${userId}`),
     supabase.from('lesson_packages').select('*, teacher_profiles(profiles(full_name))').eq('student_id', userId).in('status', ['active', 'used_up']).order('created_at', { ascending: false }),
+    supabase.from('lesson_reports').select('booking_id, status, resolution').eq('reported_by', userId),
   ])
   const packages = (packageRows ?? []).map((pkg) => ({
     id: pkg.id,
@@ -78,11 +92,15 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
     expiresAt: pkg.expires_at,
   }))
   const hasPackageWith = new Set(packages.map((pkg) => pkg.teacherId))
+  const { data: pageRows } = await supabase.from('lesson_pages').select('booking_id, page').in('booking_id', (allBookings ?? []).map((b) => b.id))
+  const lessonPages = pagesByBooking(pageRows ?? [])
   const myFeedback = new Map((feedbackRows ?? []).filter((f) => f.author_id === userId).map((f) => [f.booking_id, f]))
   const teacherFeedback = new Map((feedbackRows ?? []).filter((f) => f.author_id !== userId).map((f) => [f.booking_id, f]))
   const hasUnseenFeedback = (feedbackRows ?? []).some((f) => f.author_id !== userId && !f.recipient_seen_at)
+  const myReports = new Map((reportRows ?? []).map((r) => [r.booking_id, r]))
   const now = new Date()
 
+  const teacherPeople = await loadParticipants((allBookings ?? []).map((b) => b.teacher_id))
   const requestedFilter = searchParams.filter ?? 'all'
   const filter = requestedFilter in FILTERS ? requestedFilter : 'all'
   const q = (searchParams.q ?? '').trim().toLowerCase()
@@ -94,7 +112,7 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
     })
     .filter((booking) => {
       if (!q) return true
-      const haystack = `${booking.subject} ${booking.teacher_profiles?.profiles?.full_name ?? ''}`.toLowerCase()
+      const haystack = `${booking.subject} ${teacherPeople.get(booking.teacher_id)?.name ?? ''}`.toLowerCase()
       return haystack.includes(q)
     })
 
@@ -104,7 +122,7 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
     <main className="container mx-auto px-4 py-12">
       <PendingPaymentRefresher active={hasPendingPayment} />
       {hasUnseenFeedback ? <MarkFeedbackSeen /> : null}
-      {searchParams.package === 'success' && !packages.length ? (
+      {searchParams.package && !packages.length ? (
         <p className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           Payment received. Your package will appear here in a moment; refresh if it doesn&apos;t.
         </p>
@@ -147,8 +165,8 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
             subject: booking.subject,
             startAt: booking.start_at,
             status: booking.status,
-            counterpartName: booking.teacher_profiles?.profiles?.full_name ?? null,
-            counterpartAvatarUrl: booking.teacher_profiles?.profiles?.avatar_url,
+            counterpartName: teacherPeople.get(booking.teacher_id)?.name ?? null,
+            counterpartAvatarUrl: teacherPeople.get(booking.teacher_id)?.avatarUrl,
             counterpartHref: booking.teacher_profiles?.id ? `/teachers/${booking.teacher_profiles.id}` : undefined,
             isTrial: booking.is_trial,
           })
@@ -158,6 +176,13 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
           if (!booking) return null
           const teacher = booking.teacher_profiles
           const message = statusMessage(booking.status)
+          const report = myReports.get(booking.id)
+          const reportBadge = report ? (
+            <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${report.status === 'open' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+              {reportStatusLabel(report)}
+            </span>
+          ) : null
+          const lessonPrompt = { bookingId: booking.id, role: 'student' as const, otherName: teacherPeople.get(booking.teacher_id)?.name || 'your teacher', subject: booking.subject, startAt: booking.start_at, endAt: booking.end_at }
 
           const ended = new Date(booking.end_at) <= now
           if ((booking.status === 'confirmed' && ended) || booking.status === 'completed') {
@@ -165,7 +190,13 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
             const tags = teacherFeedback.get(booking.id)?.tags ?? []
             return (
               <>
+                {lessonPages.get(booking.id)?.length ? (
+                  <span className="whitespace-nowrap text-xs text-slate-500" title="Mushaf pages worked on in this lesson">
+                    {formatPageRanges(lessonPages.get(booking.id)!)}
+                  </span>
+                ) : null}
                 <FeedbackTags tags={tags} className="justify-end" />
+                {reportBadge ?? <ReportProblemButton prompt={lessonPrompt} className="whitespace-nowrap text-xs" />}
                 {/* After a trial, further lessons with this teacher come from a package only. */}
                 {booking.is_trial && teacher && !hasPackageWith.has(teacher.id) ? (
                   <Link href={`/teachers/${teacher.id}?intent=package#package`} className="whitespace-nowrap text-sm font-medium text-emerald-700 hover:text-emerald-800">
@@ -178,10 +209,7 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
                     {mine.visibility === 'public' ? 'Public' : 'Private'}
                   </span>
                 ) : teacher ? (
-                  <GiveFeedbackButton
-                    prompt={{ bookingId: booking.id, role: 'student', otherName: teacher.profiles?.full_name || 'your teacher', subject: booking.subject, startAt: booking.start_at }}
-                    className="whitespace-nowrap"
-                  />
+                  <GiveFeedbackButton prompt={lessonPrompt} className="whitespace-nowrap" />
                 ) : null}
               </>
             )
@@ -207,7 +235,12 @@ export default async function StudentBookingsPage({ searchParams }: StudentBooki
             )
           }
 
-          return message ? <span className="text-xs text-slate-400">{message}</span> : null
+          return (
+            <>
+              {reportBadge}
+              {message ? <span className="text-xs text-slate-400">{message}</span> : null}
+            </>
+          )
         }}
       />
     </main>

@@ -8,19 +8,21 @@ export type PaymentProviderId = 'stripe'
 
 export type Currency = 'gbp'
 
-/** Enough to act on one payment: where it lives and whose payout account received it. */
+/**
+ * Enough to act on one payment: its id and the account it was charged on.
+ * `payeeAccountId` is null for payments charged on My Madrassa's own account
+ * (the normal case since migration 0044); older payments were charged on the
+ * teacher's payout account.
+ */
 export interface PaymentRef {
   paymentId: string
-  payeeAccountId: string
+  payeeAccountId: string | null
 }
 
+/** A checkout on My Madrassa's own account: the student pays My Madrassa, which pays the teacher later (transfer + payout). */
 export interface CheckoutInput {
   amount: number
-  /** The platform's cut, kept from the amount. */
-  platformFee: number
   currency: Currency
-  /** The teacher's payout account the student pays into. */
-  payeeAccountId: string
   /**
    * 'manual' authorizes now and charges on capturePayment (a lesson, charged
    * when the teacher accepts); 'automatic' charges at once (a package).
@@ -30,6 +32,8 @@ export interface CheckoutInput {
   description: string
   /** Our id for it (booking or package), kept with the payment for reconciliation. */
   reference: string
+  /** Extra ids kept with the payment (e.g. the teacher's). */
+  metadata?: Record<string, string>
   successUrl: string
   cancelUrl: string
 }
@@ -63,16 +67,28 @@ export interface PaymentProvider {
   createPayeeOnboardingLink(accountId: string, urls: { returnUrl: string; refreshUrl: string }): Promise<{ url: string }>
   /** Asks the provider directly whether the account can take payments and pay out (no webhook needed). */
   getPayeeStatus(accountId: string): Promise<{ paymentsEnabled: boolean; payoutsEnabled: boolean }>
+  /** Asks the provider how a checkout ended, as payment events (no webhook needed); [] while it's still open. */
+  getCheckoutEvents(checkoutId: string, payeeAccountId: string | null): Promise<PaymentEvent[]>
 
-  // Booking payments: authorized at checkout, captured when the teacher accepts
+  // Payments from students: authorized at checkout (a trial is captured when the teacher accepts)
   createCheckout(input: CheckoutInput): Promise<CheckoutResult>
   capturePayment(ref: PaymentRef): Promise<void>
   /** Releases an authorization without charging. */
   cancelPayment(ref: PaymentRef): Promise<void>
-  /** Refunds a captured payment, in full or `amount` of it (the platform's share is refunded proportionally). */
+  /** Refunds a captured payment, in full or `amount` of it. */
   refundPayment(ref: PaymentRef, options?: { amount?: number }): Promise<void>
+  /** What the provider really charged on a captured payment, and the card's country (ISO code), for receipts. */
+  getPaymentFees(ref: PaymentRef): Promise<{ processingFee: number; cardCountry: string | null }>
+
+  // Paying teachers: My Madrassa transfers what it owes into the teacher's payout account, then pays it out to their bank.
+  /**
+   * Moves money from My Madrassa's balance to a teacher's payout account.
+   * `sourcePaymentId` ties it to one student payment, so it can go before that
+   * money is available on our balance. Safe to retry with the same `idempotencyKey`.
+   */
+  transfer(input: { payeeAccountId: string; amount: number; currency: Currency; sourcePaymentId?: string | null; idempotencyKey: string; description?: string }): Promise<{ transferId: string }>
   /** Sends money from a teacher's payout account balance to their bank. */
-  payout(input: { payeeAccountId: string; amount: number; currency: Currency }): Promise<void>
+  payout(input: { payeeAccountId: string; amount: number; currency: Currency; idempotencyKey?: string }): Promise<{ payoutId: string }>
 
   /** Verifies a webhook and translates it; throws if the signature is invalid. Unknown events give []. */
   parseWebhook(rawBody: string, headers: Headers): Promise<PaymentEvent[]>

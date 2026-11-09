@@ -71,12 +71,15 @@ function LoginForm() {
       return
     }
 
+    // `next` (an in-app path only) brings a student back to where they were, e.g. booking a trial.
+    const next = searchParams.get('next')
+    const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null
     const destination =
       profileData.role === 'teacher'
         ? '/teacher/dashboard'
         : profileData.role === 'admin'
         ? '/admin/dashboard'
-        : '/student/dashboard'
+        : safeNext ?? '/student/dashboard'
 
     await router.push(destination)
     router.refresh()

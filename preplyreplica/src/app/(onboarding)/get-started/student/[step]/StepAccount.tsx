@@ -19,6 +19,8 @@ export function StepAccount() {
   const router = useRouter()
   const { showToast } = useToast()
   const { state, reset } = useWizard()
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [phone, setPhone] = useState('')
@@ -27,6 +29,7 @@ export function StepAccount() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!firstName.trim() || !lastName.trim()) return showToast('error', 'Enter your first and last name.')
     if (!normalizePhone(phone)) return showToast('error', phoneProblem(phone) ?? PHONE_HINT)
     if (password.length < MIN_PASSWORD_LENGTH) return showToast('error', `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
     setLoading(true)
@@ -35,6 +38,8 @@ export function StepAccount() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        firstName,
+        lastName,
         email,
         password,
         phone,
@@ -77,6 +82,10 @@ export function StepAccount() {
         <p className="mt-3 text-slate-600">We'll save your preferences and get you started.</p>
       </div>
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="First name" name="firstName" autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} maxLength={60} required />
+          <Input label="Last name" name="lastName" autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} maxLength={60} required />
+        </div>
         <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <PhoneInput value={phone} onChange={setPhone} help={'Your homework is sent to it on WhatsApp. Never shown to your teachers.'} />
         <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} minChars={MIN_PASSWORD_LENGTH} autoComplete="new-password" required />

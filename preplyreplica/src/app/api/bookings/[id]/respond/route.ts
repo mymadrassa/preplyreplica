@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { paymentRefFor } from '@/lib/payments'
 import { returnPackageLesson } from '@/lib/packages'
+import { recordLessonPaymentFees } from '@/lib/paymentFees'
 import { sendBookingApprovedEmail, sendBookingRejectedEmail } from '@/lib/email'
 
 const respondSchema = z.object({ action: z.enum(['approve', 'reject']) })
@@ -56,7 +57,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (action === 'approve') {
       if (charge) await charge.provider.capturePayment(charge.ref)
       await db.from('bookings').update({ status: 'confirmed' } as any).eq('id', booking.id)
-      if (payment) await db.from('payments').update({ status: 'succeeded' } as any).eq('id', payment.id)
+      if (payment) {
+        await db.from('payments').update({ status: 'succeeded', paid_at: new Date().toISOString() } as any).eq('id', payment.id)
+        // The real card fee, for the receipt and the teacher's statement.
+        await recordLessonPaymentFees(payment.id, db)
+      }
 
       if (studentProfile?.email) {
         await sendBookingApprovedEmail({

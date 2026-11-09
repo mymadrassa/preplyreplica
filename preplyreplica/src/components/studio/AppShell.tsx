@@ -3,11 +3,12 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronsLeft, ChevronsRight, Loader2, Menu, X, LayoutDashboard, BookOpen, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, NotebookPen, Users, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Receipt, ChevronsLeft, ChevronsRight, Loader2, Menu, X, LayoutDashboard, BookOpen, CalendarCheck, Wallet, UserCircle, Search, MessageCircle, NotebookPen, Users, type LucideIcon } from 'lucide-react'
 import { AccountMenu } from '@/components/AccountMenu'
 import { NotificationBell, type AppNotification } from '@/components/NotificationBell'
 import { SessionFeedbackPrompt } from '@/components/SessionFeedbackPrompt'
 import { GenderGate } from '@/components/GenderGate'
+import { BackButton } from '@/components/BackButton'
 import type { FeedbackPromptData } from '@/lib/sessionFeedback'
 
 interface StudioNavItem {
@@ -29,6 +30,7 @@ const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
     { href: '/student/mushaf', label: 'My Mushaf', icon: BookOpen, exact: true },
     { href: '/student/homework', label: 'Cahier de texte', icon: NotebookPen },
     { href: '/student/bookings', label: 'My bookings', icon: CalendarCheck },
+    { href: '/student/receipts', label: 'Receipts', icon: Receipt },
     { href: '/student/messages', label: 'Messages', icon: MessageCircle },
     { href: '/teachers', label: 'Find a teacher', icon: Search },
     { href: '/student/profile', label: 'Profile', icon: UserCircle },
@@ -42,7 +44,10 @@ const NAV_ITEMS_BY_ROLE: Record<StudioRole, StudioNavItem[]> = {
     { href: '/teacher/earnings', label: 'Earnings', icon: Wallet },
     { href: '/teacher/profile', label: 'Profile', icon: UserCircle },
   ],
-  admin: [{ href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+  admin: [
+    { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/admin/reports', label: 'Lesson reports', icon: AlertTriangle },
+  ],
 }
 
 interface AppShellProps {
@@ -58,6 +63,8 @@ interface AppShellProps {
   feedbackPrompt?: FeedbackPromptData | null
   /** The account has no gender yet: ask before anything else (blocking). */
   needsGender?: boolean
+  /** The account has no first/last name yet (created before signup asked). */
+  needsName?: boolean
   children: React.ReactNode
 }
 
@@ -118,7 +125,7 @@ function SidebarLinks({ navItems, pathname, collapsed, pendingHref, onNavigate }
 }
 
 /** YouTube-Studio-style shell: collapsible left sidebar + slim top bar, used by the student/teacher/admin route groups. Page content renders unchanged inside the content area. */
-export function AppShell({ role, dashboardHref, userName, avatarUrl, notifications, notificationsHeading, feedbackPrompt = null, needsGender = false, children }: AppShellProps) {
+export function AppShell({ role, dashboardHref, userName, avatarUrl, notifications, notificationsHeading, feedbackPrompt = null, needsGender = false, needsName = false, children }: AppShellProps) {
   const pathname = usePathname()
   const navItems = NAV_ITEMS_BY_ROLE[role]
   const [collapsed, setCollapsed] = useState(false)
@@ -162,6 +169,7 @@ export function AppShell({ role, dashboardHref, userName, avatarUrl, notificatio
         >
           {collapsed ? <ChevronsRight className="h-5 w-5" aria-hidden="true" /> : <ChevronsLeft className="h-5 w-5" aria-hidden="true" />}
         </button>
+        <BackButton fallbackHref={dashboardHref} hideOn={[dashboardHref]} />
         <Link href={dashboardHref} className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">P</span>
           <span className="hidden sm:inline">Preply Clone</span>
@@ -202,8 +210,8 @@ export function AppShell({ role, dashboardHref, userName, avatarUrl, notificatio
         ) : null}
 
         <main className="min-w-0 flex-1">{children}</main>
-        {needsGender && role !== 'admin' ? <GenderGate role={role} /> : null}
-        {role !== 'admin' && !needsGender ? (
+        {(needsGender || needsName) && role !== 'admin' ? <GenderGate role={role} needsName={needsName} needsGender={needsGender} /> : null}
+        {role !== 'admin' && !needsGender && !needsName ? (
           // Reads ?feedback= (set after hanging up a call), which needs a Suspense boundary.
           <Suspense fallback={null}>
             <SessionFeedbackPrompt initial={feedbackPrompt} />

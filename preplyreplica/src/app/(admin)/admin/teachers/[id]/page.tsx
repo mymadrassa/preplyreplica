@@ -12,9 +12,10 @@ import { loadTeacherProfileState } from '@/lib/teacherProfileState'
 import { submittedChangeFields } from '@/lib/adminTeacherReview'
 import { scanUncheckedDocuments, type ScanStatus } from '@/lib/documentScan'
 import { automaticReviewMessage } from '@/lib/reviewMessage'
-import { isTier } from '@/lib/pricing'
+import { TIERS, isTier } from '@/lib/pricing'
 import { GENDERS } from '@/lib/gender'
 import { IntroVideo } from '@/components/IntroVideo'
+import { CriteriaAverages } from '@/components/CriteriaAverages'
 import { watchUrlFor } from '@/lib/videoUrl'
 import { ChatThread } from '@/components/chat/ChatThread'
 import { getOrCreateSupportThread, markSupportThreadRead } from '@/lib/support'
@@ -33,7 +34,7 @@ export default async function AdminTeacherPage({ params }: { params: { id: strin
   const { data: me } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
   if (me?.role !== 'admin') notFound()
 
-  const [state, { data: profile }, { data: documents }] = await Promise.all([
+  const [state, { data: profile }, { data: documents }, { data: studentRatings }] = await Promise.all([
     loadTeacherProfileState(supabase, params.id),
     supabase.from('profiles').select('full_name, email, phone, gender, avatar_url, created_at').eq('id', params.id).maybeSingle(),
     supabase
@@ -41,6 +42,7 @@ export default async function AdminTeacherPage({ params }: { params: { id: strin
       .select('id, bucket_path, kind, review_change, uploaded_at, scan_status, scan_detail')
       .eq('teacher_id', params.id)
       .order('uploaded_at', { ascending: true }),
+    supabase.from('session_feedback').select('criteria').eq('recipient_id', params.id).eq('author_role', 'student').eq('status', 'given').eq('outcome', 'ok').limit(500),
   ])
   if (!state || !profile) notFound()
   const { teacher, readiness } = state
@@ -69,7 +71,7 @@ export default async function AdminTeacherPage({ params }: { params: { id: strin
     ['Bio', <span key="bio" className="whitespace-pre-line">{teacher.bio || '—'}</span>],
     ['Subjects', teacher.subjects?.join(', ') || '—'],
     ['Languages', teacher.languages?.join(', ') || '—'],
-    ['Hourly rate', `£${teacher.hourly_rate}`],
+    ['Rate', `£${TIERS[tier].rate.toFixed(2)}/hour (${TIERS[tier].label})`],
     ['Gender', GENDERS.find((g) => g.value === profile.gender)?.label ?? 'Not set'],
     ['WhatsApp', profile.phone || 'Not set'],
     ['Payouts', teacher.payments_enabled ? 'Set up' : 'Not completed yet'],
@@ -139,6 +141,8 @@ export default async function AdminTeacherPage({ params }: { params: { id: strin
               </div>
             ) : null}
           </section>
+
+          <CriteriaAverages role="student" title="Students' ratings" scores={(studentRatings ?? []).map((f) => f.criteria)} />
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
             <h2 className="text-lg font-semibold text-slate-900">Documents</h2>

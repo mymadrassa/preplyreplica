@@ -2,61 +2,40 @@
 
 import { useRouter } from 'next/navigation'
 import { WizardShell } from '@/components/onboarding/WizardShell'
-import { useTeacherWizard } from '@/components/onboarding/TeacherWizardProvider'
 import { useTeacherStepGuard } from '@/components/onboarding/useTeacherStepGuard'
+import { TierRates } from '@/components/TierRates'
+import { TIERS, TRIAL } from '@/lib/pricing'
 import { TEACHER_WIZARD_STEPS } from './steps'
-import { TIERS, packagePrice } from '@/lib/pricing'
 
-// £10/hour floor: even at the shortest lesson (30 min) and the lowest rate
-// allowed, the platform's 40% commission still comfortably covers the card processor's
-// processing fee (1.5% + £0.20) on top of everything else -- this isn't an
-// arbitrary number, it's the line above which the platform's own costs are
-// definitely covered, no matter the lesson length.
-const MIN_RATE = 8
-
+/** How teachers are paid: the rate comes from the tier (nothing to set), and rises with promotions. */
 export function StepRate() {
   useTeacherStepGuard('rate')
   const router = useRouter()
-  const { state, patch } = useTeacherWizard()
-
-  const canContinue = Number(state.hourlyRate) >= MIN_RATE
 
   return (
     <WizardShell
       step="rate"
       steps={TEACHER_WIZARD_STEPS}
-      title="Set your hourly rate"
-      subtitle="You can change this anytime from your dashboard."
+      title="How you're paid"
+      subtitle="Every teacher starts at the same rate, and earns more as they move up tiers."
       onBack={() => router.push('/teacher/onboarding/profile')}
       onNext={() => router.push('/teacher/onboarding/media')}
-      nextDisabled={!canContinue}
     >
-      <div className="flex items-center justify-between gap-4">
-        <label htmlFor="hourlyRate" className="text-sm font-medium text-slate-700">
-          Hourly rate (£)
-        </label>
-        <div className="flex items-center gap-1.5">
-          <span className="text-slate-500">£</span>
-          <input
-            id="hourlyRate"
-            name="hourlyRate"
-            type="number"
-            min={MIN_RATE}
-            value={state.hourlyRate}
-            onChange={(event) => patch({ hourlyRate: event.target.value })}
-            required
-            className="w-20 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-right text-slate-900 shadow-sm outline-none transition-all hover:border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
-          />
-        </div>
-      </div>
-      <p className="mt-2 text-xs text-slate-400">Minimum £{MIN_RATE}/hour — covers platform and payment processing costs.</p>
-      {Number(state.hourlyRate) >= MIN_RATE ? (
-        <p className="mt-2 text-sm text-slate-600">
-          You receive the full £{Number(state.hourlyRate).toFixed(2)} per lesson. As a new {TIERS.starter.label} teacher, students pay £
-          {packagePrice(Number(state.hourlyRate), 'starter').perLesson.toFixed(2)} a lesson in their 10-lesson package (after a fixed-price trial). Our commission drops as
-          you move up tiers.
+      <div className="space-y-4">
+        <p className="text-slate-700">
+          You start at <strong>£{TIERS.starter.rate.toFixed(2)} per hour</strong> ({TIERS.starter.label}). Your rate rises to £{TIERS.mid.rate.toFixed(2)}, then £
+          {TIERS.top.rate.toFixed(2)}, as you move up tiers: promotions happen automatically.
         </p>
-      ) : null}
+        <TierRates current="starter" />
+        <p className="text-sm text-slate-500">
+          Students first book a {TRIAL.minutes}-minute trial with you (you receive £{TRIAL.teacherReceives.toFixed(2)}, paid 48 hours after the lesson), then continue
+          with 10-lesson packages, paid together each month on the 3rd. Students pay My Madrassa, which covers the card fees: you always receive your full rate, with a
+          statement for every payout.{' '}
+          <a href="/teacher-terms" target="_blank" className="font-medium text-brand-700 underline">
+            Teacher terms
+          </a>
+        </p>
+      </div>
     </WizardShell>
   )
 }

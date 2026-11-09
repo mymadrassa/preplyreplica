@@ -25,11 +25,17 @@ export function getPaymentProvider(id: string | null | undefined = process.env.P
   return PROVIDERS[key]
 }
 
-/** The provider and reference for acting on a booking's payment; null when it can't be acted on yet. */
+/**
+ * The provider and reference for acting on a payment (a lesson's or a
+ * package's); null when it can't be acted on yet. Payments charged on My
+ * Madrassa's account need no teacher account; older direct charges do.
+ */
 export function paymentRefFor(
-  payment: { provider?: string | null; provider_payment_id: string | null } | null | undefined,
+  payment: { provider?: string | null; provider_payment_id: string | null; charge_model?: string | null } | null | undefined,
   teacher: { payout_account_id: string | null } | null | undefined
 ): { provider: PaymentProvider; ref: PaymentRef } | null {
-  if (!payment?.provider_payment_id || !teacher?.payout_account_id) return null
-  return { provider: getPaymentProvider(payment.provider), ref: { paymentId: payment.provider_payment_id, payeeAccountId: teacher.payout_account_id } }
+  if (!payment?.provider_payment_id) return null
+  const onPlatform = payment.charge_model === 'platform'
+  if (!onPlatform && !teacher?.payout_account_id) return null
+  return { provider: getPaymentProvider(payment.provider), ref: { paymentId: payment.provider_payment_id, payeeAccountId: onPlatform ? null : (teacher?.payout_account_id ?? null) } }
 }

@@ -32,7 +32,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
   // Lessons are bought as a package after the trial: the per-lesson price depends on the teacher's rate and tier.
   const allTeachers = filterTeachersForViewer(catalogue, viewer, (teacher) => teacher.profiles?.gender).map((teacher) => ({
     ...teacher,
-    lessonPrice: packagePrice(teacher.hourly_rate, isTier(teacher.tier) ? teacher.tier : 'starter').perLesson,
+    lessonPrice: packagePrice(isTier(teacher.tier) ? teacher.tier : 'starter').perLesson,
   }))
   const matchedTo = viewer.role === 'student' ? GENDERS.find((g) => g.value === viewer.gender) : undefined
   const subjectOptions = SUBJECTS

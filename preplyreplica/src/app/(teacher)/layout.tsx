@@ -19,6 +19,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   let notificationsHeading: string | undefined
   let feedbackPrompt: FeedbackPromptData | null = null
   let needsGender = false
+  let needsName = false
 
   if (session?.user?.id) {
     const [{ data: profile }, state, { data: finished }, due, { data: feedback }, adminUnread] = await Promise.all([
@@ -47,6 +48,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     userName = profile?.full_name || profile?.email?.split('@')[0] || null
     avatarUrl = profile?.avatar_url ?? null
     needsGender = !!profile && !profile.gender
+    needsName = !!profile && !profile.full_name?.trim()
     notifications = [
       ...(adminUnread
         ? [{ id: 'admin-message', title: `New message from Admin`, description: adminUnread === 1 ? 'Our team sent you a message.' : `Our team sent you ${adminUnread} messages.`, href: '/teacher/messages/admin' }]
@@ -69,7 +71,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   }
 
   return (
-    <AppShell role="teacher" dashboardHref="/teacher/dashboard" userName={userName} avatarUrl={avatarUrl} notifications={notifications} notificationsHeading={notificationsHeading} feedbackPrompt={feedbackPrompt} needsGender={needsGender}>
+    <AppShell role="teacher" dashboardHref="/teacher/dashboard" userName={userName} avatarUrl={avatarUrl} notifications={notifications} notificationsHeading={notificationsHeading} feedbackPrompt={feedbackPrompt} needsGender={needsGender} needsName={needsName}>
       {children}
     </AppShell>
   )

@@ -3,7 +3,7 @@ import { submittedChangeFields } from '@/lib/adminTeacherReview'
 import { scanUncheckedDocuments } from '@/lib/documentScan'
 import { usersWithUnreadReplies } from '@/lib/support'
 import Link from 'next/link'
-import { CalendarCheck, GraduationCap, Search, TrendingUp, UserCog, Users as UsersIcon, Wallet, Banknote } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, GraduationCap, Search, TrendingUp, UserCog, Users as UsersIcon, Wallet, Banknote } from 'lucide-react'
 import type { Database } from '@/types/database'
 import { createServerClient } from '@/lib/supabase/server'
 import { Card } from '@/components/Card'
@@ -11,7 +11,6 @@ import { Select } from '@/components/Select'
 import { Input } from '@/components/Input'
 import { Button } from '@/components/Button'
 import { AdminTeachersTable, type AdminTeacherRow } from '@/components/AdminTeachersTable'
-import { AdminPayoutConfirmCard } from '@/components/AdminPayoutConfirmCard'
 import { EarningsTrendChart } from '@/components/EarningsTrendChart'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatBookingDateTime } from '@/lib/format'
@@ -76,7 +75,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     { data: teacherStatusRows },
     { data: allPayments },
     { data: upcomingSessions },
-    { data: awaitingPayoutConfirmation },
+    { data: openReports },
   ] = await Promise.all([
     teachersQuery,
     supabase.from('bookings').select('id', { count: 'exact' }),
@@ -91,13 +90,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(20),
-    supabase
-      .from('bookings')
-      .select('id, subject, start_at, teacher_confirmed_at, student_joined_at, teacher_joined_at, teacher_profiles(profiles(full_name)), profiles!student_id(full_name, email)')
-      .eq('status', 'confirmed')
-      .not('teacher_confirmed_at', 'is', null)
-      .is('admin_confirmed_at', null)
-      .order('teacher_confirmed_at', { ascending: true }),
+    supabase.from('lesson_reports').select('booking_id').eq('status', 'open'),
   ])
 
   const changesOf = (teacher: TeacherProfileWithRelations) => {
@@ -235,7 +228,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
           <Banknote className="h-5 w-5 text-brand-600" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Paid to teachers</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">£{toPounds(paidToTeachersPence).toFixed(2)}</p>
-          <p className="mt-1 text-sm text-slate-500">Released after admin confirmation</p>
+          <p className="mt-1 text-sm text-slate-500">Sent in the monthly payouts</p>
         </Card>
         <Card>
           <TrendingUp className="h-5 w-5 text-brand-600" aria-hidden="true" />
@@ -264,26 +257,18 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         </div>
       </Card>
 
-      {awaitingPayoutConfirmation?.length ? (
-        <div className="mt-10">
-          <h2 className="text-2xl font-semibold text-slate-900">Awaiting payout confirmation</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            The teacher marked these sessions complete. Confirm each one to release the teacher's payout.
-          </p>
-          <div className="mt-4 grid gap-4">
-            {awaitingPayoutConfirmation.map((booking) => (
-              <AdminPayoutConfirmCard
-                key={booking.id}
-                bookingId={booking.id}
-                subject={booking.subject}
-                startAt={booking.start_at}
-                teacherConfirmedAt={booking.teacher_confirmed_at as string}
-                teacherName={(booking as any).teacher_profiles?.profiles?.full_name || 'Teacher'}
-                studentName={(booking as any).profiles?.full_name || (booking as any).profiles?.email || 'Student'}
-                studentJoinedAt={booking.student_joined_at as string | null}
-                teacherJoinedAt={booking.teacher_joined_at as string | null}
-              />
-            ))}
+      {openReports?.length ? (
+        <div className="mt-10 rounded-3xl border-2 border-amber-300 bg-amber-50 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-2xl font-semibold text-amber-950">
+                <AlertTriangle className="h-6 w-6 text-amber-600" aria-hidden="true" /> Reports to resolve ({new Set(openReports.map((r) => r.booking_id)).size})
+              </h2>
+              <p className="mt-1 text-sm text-amber-900">These lessons&apos; payouts are on hold until you decide.</p>
+            </div>
+            <Link href="/admin/reports" className="rounded-full bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+              Review reports
+            </Link>
           </div>
         </div>
       ) : null}

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/Button'
 import { AccountMenu } from '@/components/AccountMenu'
+import { BackButton } from '@/components/BackButton'
 import { createServerClient } from '@/lib/supabase/server'
 
 const dashboardByRole: Record<string, string> = {
@@ -39,10 +40,13 @@ export async function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">P</span>
-          Preply Clone
-        </Link>
+        <div className="flex items-center gap-2">
+          <BackButton fallbackHref="/" hideOn={['/']} />
+          <Link href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">P</span>
+            Preply Clone
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           {session?.user ? (
             <AccountMenu dashboardHref={dashboardHref} profileHref={profileHref} userName={userName} avatarUrl={avatarUrl} />

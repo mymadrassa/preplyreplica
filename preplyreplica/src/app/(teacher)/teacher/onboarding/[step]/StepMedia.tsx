@@ -87,7 +87,6 @@ export function StepMedia() {
           bio: state.bio,
           languages: state.languages,
           subjects: state.subjects,
-          hourly_rate: Number(state.hourlyRate),
           video_url: videoUrl,
           start_payout_setup: true,
         }),

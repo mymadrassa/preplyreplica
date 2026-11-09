@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { canDeleteAnnotation } from '../annotations'
+import { JUZ_START_PAGES, juzForPage, juzStartPage } from '../juz'
 import { clampPage, getFixturePage, getTotalPages, verseRefFromWordRef } from '../data'
 import { pageFromQuranCom } from '../data/quranCom'
-import { annotationCoversWord, buildMarkBlocks, commonValue, describeSelection, findEditableNote, flattenWords, highlightRuns, noteIconWordIds, notesOnPage, selectionBands, wordsBetween } from '../selection'
+import { annotationCoversWord, buildMarkBlocks, commonValue, describeSelection, findEditableNote, flattenWords, highlightRuns, noteIconWordIds, notesOnPage, selectionBands, versesOfWords, wordsBetween } from '../selection'
 import { renderModeFor, wordDisplay } from '../script'
 import { eraseFromStroke, simplifyPoints } from '../strokes'
 import { authorLabel, capabilitiesFor } from '../permissions'
@@ -89,6 +90,17 @@ describe('selection', () => {
     expect(wordsBetween(page, '1:2:1', '1:1:2').map((w) => w.id)).toEqual(['1:1:2', '1:1:3', '1:2:1'])
   })
 
+  it('finds the whole verse of marked words, and whether it runs onto another page', () => {
+    const words = flattenWords(page)
+    const [verse] = versesOfWords(page, [words[1]])
+    expect(verse).toMatchObject({ surah: 1, ayah: 1, startsBefore: false, continuesAfter: false })
+    expect(verse.words.map((w) => w.id)).toEqual(['1:1:1', '1:1:2', '1:1:3'])
+    // 1:2 has no end marker on this page: it carries on.
+    expect(versesOfWords(page, [words[3]])[0].continuesAfter).toBe(true)
+    // Marks across two verses give both, once each.
+    expect(versesOfWords(page, [words[0], words[1], words[3]]).map((v) => v.ayah)).toEqual([1, 2])
+  })
+
   it('merges contiguous words with identical marks into one summary block', () => {
     const base = { sessionId: 's', authorId: 'u', bookingId: null, endWordRef: null, noteText: null, verseRef: '1:1', createdAt: '' }
     const mark = (id: string, wordRef: string): MushafAnnotation => ({ ...base, id, kind: 'highlight', color: 'yellow', errorType: null, wordRef })
@@ -96,6 +108,30 @@ describe('selection', () => {
     expect(blocks.map((b) => b.words.map((w) => w.id))).toEqual([['1:1:1', '1:1:2'], ['1:2:1']])
     expect(blocks[0].items).toHaveLength(1)
     expect(blocks[0].items[0].annotationIds).toEqual(['a', 'b'])
+  })
+
+  it('puts every mark of the same verse in one card, each with the words it applies to', () => {
+    const base = { sessionId: 's', authorId: 'u', bookingId: null, endWordRef: null, noteText: null, verseRef: '1:1', createdAt: '' }
+    const blocks = buildMarkBlocks(page, [
+      { ...base, id: 'h', kind: 'highlight', color: 'yellow', errorType: null, wordRef: '1:1:1' },
+      { ...base, id: 'e1', kind: 'error', color: null, errorType: 'tajwid', wordRef: '1:1:2' },
+      { ...base, id: 'e2', kind: 'error', color: null, errorType: 'memorisation', wordRef: '1:1:2' },
+    ])
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]).toMatchObject({ key: '1:1', surah: 1, ayah: 1 })
+    expect(blocks[0].words.map((w) => w.id)).toEqual(['1:1:1', '1:1:2'])
+    expect(blocks[0].items.map((i) => [i.kind, i.errorType ?? i.color, i.words.map((w) => w.id)])).toEqual([
+      ['highlight', 'yellow', ['1:1:1']],
+      ['error', 'tajwid', ['1:1:2']],
+      ['error', 'memorisation', ['1:1:2']],
+    ])
+  })
+
+  it('shows a comment spanning two verses once, with the first verse', () => {
+    const note: MushafAnnotation = { id: 'n', sessionId: 's', authorId: 'u', bookingId: null, kind: 'note', color: null, errorType: null, wordRef: '1:1:1', endWordRef: '1:2:1', verseRef: '1:1', noteText: 'x', createdAt: '' }
+    const blocks = buildMarkBlocks(page, [note])
+    expect(blocks.map((b) => b.key)).toEqual(['1:1'])
+    expect(blocks[0].items[0].words.map((w) => w.id)).toEqual(['1:1:1', '1:1:2', '1:1:3'])
   })
 
   it('produces no block for unmarked words', () => {
@@ -211,8 +247,10 @@ describe('role capabilities', () => {
     expect(capabilitiesFor('student').controlsSharedPage).toBe(false)
   })
 
-  it('gives a student comments only, and the others every kind of mark', () => {
-    expect(capabilitiesFor('student').markKinds).toEqual(['note'])
+  it('makes the shared Mushaf read-only for the student, and gives the others every kind of mark', () => {
+    expect(capabilitiesFor('student').markKinds).toEqual([])
+    expect(capabilitiesFor('student').canDraw).toBe(false)
+    expect(capabilitiesFor('teacher').canDraw).toBe(true)
     expect(capabilitiesFor('teacher').markKinds).toEqual(['highlight', 'error', 'note'])
     expect(capabilitiesFor('owner').markKinds).toEqual(['highlight', 'error', 'note'])
   })
@@ -225,6 +263,9 @@ describe('role capabilities', () => {
 
   it('names authors relative to the viewer', () => {
     expect(authorLabel('owner', 'me', null)).toBe('You')
+    expect(authorLabel('owner', 'me', null, 'me')).toBe('You')
+    // A teacher's mark shown in the student's own Mushaf.
+    expect(authorLabel('owner', 't1', null, 'me')).toBe('Teacher')
     expect(authorLabel('teacher', 't1', 't1')).toBe('Teacher')
     expect(authorLabel('student', 's1', 't1')).toBe('Student')
   })
@@ -377,5 +418,23 @@ describe('Quran scripts', () => {
       { verse_key: '2:6', words: [{ position: 11, char_type_name: 'word', text_uthmani: 'يُؤْمِنُونَ', text_indopak: 'يُؤۡمِنُوۡنَ\u200f', line_number: 2 }] },
     ])
     expect(page.lines[0].words[0].indopak).toBe('يُؤۡمِنُوۡنَ')
+  })
+})
+
+
+describe('juz', () => {
+  it('has 30 juz in page order across the 604 pages', () => {
+    expect(JUZ_START_PAGES).toHaveLength(30)
+    expect([...JUZ_START_PAGES].sort((a, b) => a - b)).toEqual(JUZ_START_PAGES)
+    expect(JUZ_START_PAGES[29]).toBeLessThanOrEqual(604)
+  })
+
+  it('maps pages to their juz and back', () => {
+    expect(juzForPage(1)).toBe(1)
+    expect(juzForPage(21)).toBe(1)
+    expect(juzForPage(22)).toBe(2)
+    expect(juzForPage(604)).toBe(30)
+    expect(juzStartPage(30)).toBe(582)
+    expect(juzStartPage(0)).toBe(1)
   })
 })

@@ -38,6 +38,12 @@ export function PackageOffer({ teacherId, teacherName, pricing, highlight = fals
         Save {Math.round(PACKAGE.discount * 100)}% (£{pricing.savings.toFixed(2)}) on {pricing.lessons} one-hour lessons with {teacherName}: £{pricing.perLesson.toFixed(2)} a lesson. Use them
         within {PACKAGE.validityMonths} months; unused lessons are refunded.
       </p>
+      <p className="text-xs text-slate-500">
+        Paid to My Madrassa, with a receipt showing every fee.{' '}
+        <a href="/terms" target="_blank" className="font-medium text-brand-700 underline">
+          Terms
+        </a>
+      </p>
       <Button type="button" onClick={buy} loading={loading} className="w-full">
         Buy {pricing.lessons} lessons
       </Button>

@@ -24,7 +24,6 @@ describe('getTeacherReadiness', () => {
   const cases: ['profile' | 'phone' | 'gender' | 'photo' | 'identity' | 'payouts', Partial<TeacherReadinessInput>][] = [
     ['profile', { bio: 'too short' }],
     ['profile', { subjects: [] }],
-    ['profile', { hourly_rate: 5 }],
     ['phone', { phone: null }],
     ['gender', { gender: null }],
     ['photo', { avatar_url: null }],

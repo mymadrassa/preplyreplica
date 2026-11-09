@@ -13,11 +13,14 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@jitsi/react-sdk": "^1.4.4",
+    "@livekit/components-react": "^2.9.25",
+    "@livekit/components-styles": "^1.2.0",
     "@preply-clone/mushaf": "*",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.48.0",
     "clsx": "^2.1.1",
+    "livekit-client": "^2.23.0",
+    "livekit-server-sdk": "^2.19.2",
     "lucide-react": "^1.27.0",
     "next": "14.2.5",
     "nodemailer": "^10.3.1",

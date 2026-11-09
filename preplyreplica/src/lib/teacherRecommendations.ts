@@ -3,7 +3,7 @@ import type { Database } from '@/types/database'
 import { rankTeachersForStudent, type StudentSignal, type TeacherSignal } from '@/lib/recommendation'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { canBeMatched } from '@/lib/gender'
-import { isTier, packagePrice } from '@/lib/pricing'
+import { isTier, packagePrice, tierRate } from '@/lib/pricing'
 
 export interface RankedTeacher {
   id: string
@@ -37,8 +37,8 @@ export async function fetchRankedTeachers(
   const { data: teachers } = await supabase.from('teacher_profiles').select('*, profiles(*)').eq('status', 'approved').eq('payments_enabled', true)
   if (!teachers?.length) return []
 
-  // Genders are private (profiles RLS is owner-only), so they're read with the server key.
-  const { data: genders } = await createSupabaseServiceRoleClient().from('profiles').select('id, gender').in('id', teachers.map((t) => t.id))
+  // Profiles are private (RLS is owner-only), so genders and names are read with the server key.
+  const { data: genders } = await createSupabaseServiceRoleClient().from('profiles').select('id, gender, full_name').in('id', teachers.map((t) => t.id))
   const genderOf = new Map((genders ?? []).map((g) => [g.id, g.gender]))
   const allTeachers = teachers.filter((t) => canBeMatched(studentGender, genderOf.get(t.id)))
   if (!allTeachers.length) return []
@@ -54,7 +54,7 @@ export async function fetchRankedTeachers(
   const signals: TeacherSignal[] = allTeachers.map((teacher) => ({
     id: teacher.id,
     subjects: teacher.subjects ?? [],
-    hourlyRate: teacher.hourly_rate,
+    hourlyRate: tierRate(isTier(teacher.tier) ? teacher.tier : 'starter'),
     ratingAvg: Number(teacher.rating_avg),
     ratingCount: teacher.rating_count,
     availabilitySlots: (allSlots ?? []).filter((s) => s.teacher_id === teacher.id),
@@ -68,11 +68,11 @@ export async function fetchRankedTeachers(
     const teacher = byId.get(r.teacherId)!
     return {
       id: teacher.id,
-      full_name: teacher.profiles?.full_name ?? 'Teacher',
+      full_name: genders?.find((g) => g.id === teacher.id)?.full_name || 'Teacher',
       headline: teacher.headline,
       rating_avg: Number(teacher.rating_avg),
       hourly_rate: teacher.hourly_rate,
-      lesson_price: packagePrice(teacher.hourly_rate, isTier(teacher.tier) ? teacher.tier : 'starter').perLesson,
+      lesson_price: packagePrice(isTier(teacher.tier) ? teacher.tier : 'starter').perLesson,
       subjects: teacher.subjects,
       languages: teacher.languages,
       status: teacher.status,

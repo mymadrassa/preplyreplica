@@ -58,7 +58,7 @@ export function TeacherDetailsForm({
   /** Called after a successful save; `pendingReview` is true when the change waits for admin review. */
   onSaved?: (pendingReview: boolean) => void
   onCancel?: () => void
-  /** The teacher's tier, for the "students pay …" hint under the rate. */
+  /** The teacher's tier, which sets their rate. */
   tier?: Tier
 }) {
   const { showToast } = useToast()
@@ -66,7 +66,6 @@ export function TeacherDetailsForm({
   const [bio, setBio] = useState(initial.bio ?? '')
   const [languages, setLanguages] = useState<string[]>(initial.languages.length ? initial.languages : ['English'])
   const [subjects, setSubjects] = useState<string[]>(initial.subjects)
-  const [hourlyRate, setHourlyRate] = useState(initial.hourly_rate?.toString() ?? '25')
   const [videoUrl, setVideoUrl] = useState(initial.video_url ?? '')
   const [saving, setSaving] = useState(false)
 
@@ -90,7 +89,6 @@ export function TeacherDetailsForm({
           bio,
           languages,
           subjects,
-          hourly_rate: Number(hourlyRate),
           video_url: isOwnUpload ? trimmedVideoUrl : normalizedVideo?.embedUrl ?? '',
         }),
       })
@@ -114,15 +112,10 @@ export function TeacherDetailsForm({
       <TextArea label="Bio" name="bio" rows={5} value={bio} onChange={(event) => setBio(event.target.value)} required />
       <ChoiceGroup label="Languages" options={LANGUAGES} value={languages} onChange={setLanguages} />
       <ChoiceGroup label="Subjects" options={SUBJECTS} value={subjects} onChange={setSubjects} />
-      <div>
-        <Input label="Hourly rate (£)" name="hourlyRate" type="number" min={8} value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} required />
-        {Number(hourlyRate) >= 8 ? (
-          <p className="mt-2 text-xs text-slate-500">
-            You receive the full rate. At your {TIERS[tier].label} tier ({Math.round(TIERS[tier].commission * 100)}% commission), students pay £
-            {packagePrice(Number(hourlyRate), tier).perLesson.toFixed(2)} a lesson in their 10-lesson package.
-          </p>
-        ) : null}
-      </div>
+      <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <strong className="text-slate-900">Your rate: £{TIERS[tier].rate.toFixed(2)}/hour</strong> ({TIERS[tier].label} tier). It&apos;s set by your tier and rises when
+        you&apos;re promoted. Students pay £{packagePrice(tier).perLesson.toFixed(2)} a lesson in their 10-lesson package.
+      </p>
       <div>
         <Input
           label={

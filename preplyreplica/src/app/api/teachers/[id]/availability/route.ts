@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
-import { getAvailableStartTimes } from '@/lib/availability'
+import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { dateKey, getAvailableStartTimes } from '@/lib/availability'
 import { MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
 
 const VALID_DURATIONS = [30, 45, 60, 90]
@@ -34,7 +34,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
       .select('exception_date, start_time, end_time, kind')
       .eq('teacher_id', params.id)
       .eq('exception_date', dateParam),
-    supabase
+    // Every student's bookings take the teacher's time, but a student can only read their own
+    // (RLS): read them with the server key, keeping only times and status (no names).
+    createSupabaseServiceRoleClient()
       .from('bookings')
       .select('start_at, end_at, status')
       .eq('teacher_id', params.id)
@@ -64,6 +66,9 @@ async function getWeekRange(request: Request, teacherId: string) {
   const weekStart = new Date(year, month - 1, day)
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + 7)
+  // A local date, like exception_date: toISOString() would convert to UTC and, east of
+  // UTC (e.g. Paris), land on the Sunday, cutting the week's last day off.
+  const weekEndKey = dateKey(weekEnd)
 
   const supabase = createServerClient()
   const [{ data: slots }, { data: exceptions }, { data: bookings }] = await Promise.all([
@@ -73,13 +78,15 @@ async function getWeekRange(request: Request, teacherId: string) {
       .select('exception_date, start_time, end_time, kind')
       .eq('teacher_id', teacherId)
       .gte('exception_date', weekStartParam)
-      .lt('exception_date', weekEnd.toISOString().slice(0, 10)),
-    supabase
+      .lt('exception_date', weekEndKey),
+    // Every student's bookings take the teacher's time, but a student can only read their own
+    // (RLS): read them with the server key, keeping only times and status (no names).
+    createSupabaseServiceRoleClient()
       .from('bookings')
       .select('start_at, end_at, status')
       .eq('teacher_id', teacherId)
       .gte('start_at', `${weekStartParam}T00:00:00`)
-      .lt('start_at', `${weekEnd.toISOString().slice(0, 10)}T00:00:00`),
+      .lt('start_at', `${weekEndKey}T00:00:00`),
   ])
 
   return NextResponse.json({

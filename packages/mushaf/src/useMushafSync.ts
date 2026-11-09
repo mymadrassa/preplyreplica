@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   addAnnotation,
   addAnnotations,
@@ -22,6 +22,8 @@ interface UseMushafSyncOptions {
   initialPage: number
   /** Stamped on every annotation added through this hook, so marks belong to a lesson. */
   bookingId?: string | null
+  /** Other sessions whose marks and drawings are shown too, read-only (a student's lessons with their teachers, in their personal space). */
+  linkedSessionIds?: string[]
 }
 
 export interface MushafSync {
@@ -41,11 +43,33 @@ export interface MushafSync {
 // The single seam between the Mushaf UI and its transport. Everything above
 // this hook is transport-agnostic, so swapping Supabase Realtime for Yjs
 // later only means rewriting the inside of this function.
-export function useMushafSync({ supabase, sessionId, currentUserId, initialPage, bookingId = null }: UseMushafSyncOptions): MushafSync {
+export function useMushafSync({ supabase, sessionId, currentUserId, initialPage, bookingId = null, linkedSessionIds = [] }: UseMushafSyncOptions): MushafSync {
   const [currentPage, setCurrentPage] = useState(initialPage)
-  const [annotations, setAnnotations] = useState<MushafAnnotation[]>([])
-  const [strokes, setStrokes] = useState<MushafStroke[]>([])
+  const [ownAnnotations, setAnnotations] = useState<MushafAnnotation[]>([])
+  const [ownStrokes, setStrokes] = useState<MushafStroke[]>([])
+  const [linkedAnnotations, setLinkedAnnotations] = useState<MushafAnnotation[]>([])
+  const [linkedStrokes, setLinkedStrokes] = useState<MushafStroke[]>([])
   const [loading, setLoading] = useState(true)
+  const linkedKey = linkedSessionIds.join(',')
+
+  // Linked sessions are read once when the page opens: they're someone else's marks, not edited here.
+  useEffect(() => {
+    const ids = linkedKey ? linkedKey.split(',') : []
+    if (!ids.length) return
+    let isMounted = true
+    Promise.all(ids.map((id) => listAnnotations(supabase, id))).then((lists) => {
+      if (isMounted) setLinkedAnnotations(lists.flat())
+    })
+    Promise.all(ids.map((id) => listStrokes(supabase, id))).then((lists) => {
+      if (isMounted) setLinkedStrokes(lists.flat())
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [supabase, linkedKey])
+
+  const annotations = useMemo(() => (linkedAnnotations.length ? [...linkedAnnotations, ...ownAnnotations] : ownAnnotations), [linkedAnnotations, ownAnnotations])
+  const strokes = useMemo(() => (linkedStrokes.length ? [...linkedStrokes, ...ownStrokes] : ownStrokes), [linkedStrokes, ownStrokes])
 
   useEffect(() => {
     let isMounted = true

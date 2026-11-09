@@ -6,7 +6,7 @@ import { PackageOffer } from '@/components/PackageOffer'
 import { TRIAL, isTier, packagePrice, trialPrice } from '@/lib/pricing'
 import { lessonsLeft } from '@/lib/packages'
 import { hasHadFirstLesson } from '@/lib/trialRule'
-import { BookingForm } from '@/components/BookingForm'
+import { BookLessonButton } from '@/components/BookLessonButton'
 import { Card } from '@/components/Card'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RatingStars } from '@/components/RatingStars'
@@ -81,7 +81,7 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
   const packageRequired = canBook && !!viewerId && (await hasHadFirstLesson(supabase, viewerId, teacher.id))
   const tier = isTier(teacher.tier) ? teacher.tier : 'starter'
   const trial = trialPrice()
-  const pkgPricing = packagePrice(teacher.hourly_rate, tier)
+  const pkgPricing = packagePrice(tier)
   // The signed-in student's live package with this teacher, if any.
   const { data: activePackage } =
     canBook && viewerId
@@ -172,7 +172,7 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
                 <br />
                 <strong>2. Then:</strong> {pkgPricing.lessons} one-hour lessons for £{pkgPricing.price.toFixed(2)} (£{pkgPricing.perLesson.toFixed(2)} a lesson).
               </p>
-              <p className="text-slate-600">Pay securely online and join the Jitsi meeting when the lesson starts.</p>
+              <p className="text-slate-600">Pay securely online. Lessons happen in our video room, with the Mushaf on screen.</p>
             </div>
           </Card>
           {viewerId && !isOwnProfile && viewerRole === 'student' ? (
@@ -182,10 +182,13 @@ export default async function TeacherDetailsPage({ params, searchParams }: Teach
             <PackageOffer teacherId={teacher.id} teacherName={teacher.profiles?.full_name ?? 'this teacher'} pricing={pkgPricing} highlight={packageRequired || searchParams.intent === 'package'} />
           ) : null}
           {canBook ? (
-            <BookingForm
-              teacher={{ id: teacher.id, hourly_rate: teacher.hourly_rate, tier, subjects: teacher.subjects, languages: teacher.languages }}
+            <BookLessonButton
+              teacher={{ id: teacher.id, tier, subjects: teacher.subjects, languages: teacher.languages }}
+              teacherName={teacher.profiles?.full_name ?? 'your teacher'}
+              signedIn={!!viewerId}
               packageRequired={packageRequired}
               activePackage={activePackage ? { id: activePackage.id, lessonsLeft: lessonsLeft(activePackage), expiresAt: activePackage.expires_at } : null}
+              autoOpen={searchParams.intent === 'trial'}
             />
           ) : isOwnProfile ? (
             <Card>

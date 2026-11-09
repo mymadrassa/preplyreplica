@@ -15,8 +15,10 @@ import { isTier } from '@/lib/pricing'
 import { nextTierProgress } from '@/lib/tiers'
 import { loadTeacherStats } from '@/lib/loadTeacherStats'
 import { BookingActions } from '@/components/BookingActions'
+import { ReportProblemButton } from '@/components/SessionFeedbackPrompt'
 import { BookingsTable, type BookingRow } from '@/components/BookingsTable'
 import { dateKey } from '@/lib/availability'
+import { loadParticipants } from '@/lib/participantNames'
 
 export default async function TeacherDashboardPage({
   searchParams,
@@ -40,6 +42,7 @@ export default async function TeacherDashboardPage({
   if (!teacher) {
     redirect('/teacher/onboarding')
   }
+  const studentPeople = await loadParticipants((bookings ?? []).map((b) => b.student_id))
 
   // Back from the provider's payout setup: read the account's status directly
   // rather than waiting for its webhook, so the step turns green straight away.
@@ -128,7 +131,7 @@ export default async function TeacherDashboardPage({
           <p className="text-slate-600">{teacher?.rating_count ?? 0} reviews</p>
         </Card>
         {tierProgress !== undefined ? (
-          <TierProgress tier={tier} rate={teacher.hourly_rate} progress={tierProgress} locked={teacher.tier_locked} />
+          <TierProgress tier={tier} progress={tierProgress} locked={teacher.tier_locked} />
         ) : (
           <Card>
             <Wallet className="h-5 w-5 text-brand-600" aria-hidden="true" />
@@ -149,8 +152,8 @@ export default async function TeacherDashboardPage({
                 subject: booking.subject,
                 startAt: booking.start_at,
                 status: booking.status,
-                counterpartName: booking.profiles?.full_name || booking.profiles?.email || 'Student',
-                counterpartAvatarUrl: booking.profiles?.avatar_url,
+                counterpartName: studentPeople.get(booking.student_id)?.name ?? 'Student',
+                counterpartAvatarUrl: studentPeople.get(booking.student_id)?.avatarUrl,
                 isTrial: booking.is_trial,
               })
             )}
@@ -181,13 +184,13 @@ export default async function TeacherDashboardPage({
                       <BookOpenCheck className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   ) : null}
-                  <BookingActions
-                    compact
-                    bookingId={booking.id}
-                    status={booking.status}
-                    endAt={booking.end_at}
-                    teacherConfirmedAt={booking.teacher_confirmed_at}
-                  />
+                  <BookingActions compact bookingId={booking.id} status={booking.status} />
+                  {booking.status === 'completed' || (booking.status === 'confirmed' && new Date(booking.end_at) <= new Date()) ? (
+                    <ReportProblemButton
+                      prompt={{ bookingId: booking.id, role: 'teacher', otherName: studentPeople.get(booking.student_id)?.name ?? 'your student', subject: booking.subject, startAt: booking.start_at, endAt: booking.end_at }}
+                      className="whitespace-nowrap text-xs"
+                    />
+                  ) : null}
                 </>
               )
             }}

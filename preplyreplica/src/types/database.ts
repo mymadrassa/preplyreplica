@@ -1,6 +1,14 @@
 // /Users/ybdn95/Desktop/preplyreplica/preplyreplica/src/types/database.ts
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
+/** Why a lesson was reported (see migration 0042). */
+export type ReportReason = 'no_show' | 'technical' | 'cut_short' | 'other'
+export type ReportResolution = 'pay_teacher' | 'refund_student' | 'refund_partial'
+/** Where a lesson's teacher payout stands: not yet due, held by a report, payable (trial: next daily run; others: the 3rd), paid, or refunded instead. */
+/** Where a payment was charged: the teacher's Stripe account (until migration 0044) or My Madrassa's. */
+export type ChargeModel = 'direct' | 'platform'
+export type PayoutState = 'none' | 'held' | 'scheduled' | 'paid' | 'refunded'
+
 export type Database = {
   public: {
     Tables: {
@@ -149,6 +157,11 @@ export type Database = {
           provider_payment_id: string | null
           status: 'pending_payment' | 'active' | 'used_up' | 'expired' | 'cancelled'
           expires_at: string | null
+          charge_model: ChargeModel
+          processing_fee: number | null
+          platform_amount: number | null
+          card_country: string | null
+          paid_at: string | null
           created_at: string
         }
         Insert: {
@@ -167,6 +180,11 @@ export type Database = {
           provider_payment_id?: string | null
           status?: 'pending_payment' | 'active' | 'used_up' | 'expired' | 'cancelled'
           expires_at?: string | null
+          charge_model?: ChargeModel
+          processing_fee?: number | null
+          platform_amount?: number | null
+          card_country?: string | null
+          paid_at?: string | null
           created_at?: string
         }
         Update: {
@@ -185,6 +203,11 @@ export type Database = {
           provider_payment_id?: string | null
           status?: 'pending_payment' | 'active' | 'used_up' | 'expired' | 'cancelled'
           expires_at?: string | null
+          charge_model?: ChargeModel
+          processing_fee?: number | null
+          platform_amount?: number | null
+          card_country?: string | null
+          paid_at?: string | null
           created_at?: string
         }
         Relationships: [
@@ -216,6 +239,10 @@ export type Database = {
           comment: string | null
           visibility: 'public' | 'private' | null
           tags: string[]
+          outcome: 'ok' | 'reported'
+          criteria: Record<string, number>
+          report_reason: ReportReason | null
+          report_detail: string | null
           recipient_seen_at: string | null
           created_at: string
         }
@@ -230,6 +257,10 @@ export type Database = {
           comment?: string | null
           visibility?: 'public' | 'private' | null
           tags?: string[]
+          outcome?: 'ok' | 'reported'
+          criteria?: Record<string, number>
+          report_reason?: ReportReason | null
+          report_detail?: string | null
           recipient_seen_at?: string | null
           created_at?: string
         }
@@ -244,6 +275,10 @@ export type Database = {
           comment?: string | null
           visibility?: 'public' | 'private' | null
           tags?: string[]
+          outcome?: 'ok' | 'reported'
+          criteria?: Record<string, number>
+          report_reason?: ReportReason | null
+          report_detail?: string | null
           recipient_seen_at?: string | null
           created_at?: string
         }
@@ -559,6 +594,10 @@ export type Database = {
           teacher_joined_at: string | null
           teacher_left_at: string | null
           is_trial: boolean
+          payout_state: PayoutState
+          payout_amount: number | null
+          payout_eligible_at: string | null
+          payout_batch_id: string | null
           created_at: string
         }
         Insert: {
@@ -590,6 +629,10 @@ export type Database = {
           teacher_joined_at?: string | null
           teacher_left_at?: string | null
           is_trial?: boolean
+          payout_state?: PayoutState
+          payout_amount?: number | null
+          payout_eligible_at?: string | null
+          payout_batch_id?: string | null
           created_at?: string
         }
         Update: {
@@ -620,6 +663,10 @@ export type Database = {
           teacher_joined_at?: string | null
           teacher_left_at?: string | null
           is_trial?: boolean
+          payout_state?: PayoutState
+          payout_amount?: number | null
+          payout_eligible_at?: string | null
+          payout_batch_id?: string | null
           created_at?: string
         }
         Relationships: [
@@ -653,6 +700,12 @@ export type Database = {
           processing_fee_estimate: number
           pending_fees_billed: number
           payout_at: string | null
+          charge_model: ChargeModel
+          processing_fee: number | null
+          platform_amount: number | null
+          card_country: string | null
+          paid_at: string | null
+          refunded_amount: number
           status: string
           created_at: string
         }
@@ -669,6 +722,12 @@ export type Database = {
           processing_fee_estimate?: number
           pending_fees_billed?: number
           payout_at?: string | null
+          charge_model?: ChargeModel
+          processing_fee?: number | null
+          platform_amount?: number | null
+          card_country?: string | null
+          paid_at?: string | null
+          refunded_amount?: number
           status?: string
           created_at?: string
         }
@@ -684,6 +743,12 @@ export type Database = {
           processing_fee_estimate?: number
           pending_fees_billed?: number
           payout_at?: string | null
+          charge_model?: ChargeModel
+          processing_fee?: number | null
+          platform_amount?: number | null
+          card_country?: string | null
+          paid_at?: string | null
+          refunded_amount?: number
           status?: string
           created_at?: string
         }
@@ -893,6 +958,140 @@ export type Database = {
           },
           {
             foreignKeyName: 'conversations_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teacher_profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      lesson_pages: {
+        Row: {
+          booking_id: string
+          page: number
+          first_seen_at: string
+        }
+        Insert: {
+          booking_id: string
+          page: number
+          first_seen_at?: string
+        }
+        Update: {
+          booking_id?: string
+          page?: number
+          first_seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_pages_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: false
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      lesson_reports: {
+        Row: {
+          id: string
+          booking_id: string
+          reported_by: string
+          reporter_role: 'student' | 'teacher'
+          reason: ReportReason
+          detail: string
+          status: 'open' | 'resolved'
+          resolution: ReportResolution | null
+          refund_amount: number | null
+          admin_note: string | null
+          resolved_by: string | null
+          resolved_at: string | null
+          reminder_sent_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          reported_by: string
+          reporter_role: 'student' | 'teacher'
+          reason: ReportReason
+          detail: string
+          status?: 'open' | 'resolved'
+          resolution?: ReportResolution | null
+          refund_amount?: number | null
+          admin_note?: string | null
+          resolved_by?: string | null
+          resolved_at?: string | null
+          reminder_sent_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          status?: 'open' | 'resolved'
+          resolution?: ReportResolution | null
+          refund_amount?: number | null
+          admin_note?: string | null
+          resolved_by?: string | null
+          resolved_at?: string | null
+          reminder_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_reports_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: false
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      teacher_payouts: {
+        Row: {
+          id: string
+          teacher_id: string
+          booking_id: string | null
+          period: string
+          amount: number
+          lessons_count: number
+          provider: string
+          provider_payout_id: string | null
+          provider_transfer_id: string | null
+          transferred_amount: number
+          status: 'pending' | 'paid' | 'failed'
+          failure_reason: string | null
+          attempts: number
+          paid_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          booking_id?: string | null
+          period: string
+          amount: number
+          lessons_count: number
+          provider?: string
+          provider_payout_id?: string | null
+          provider_transfer_id?: string | null
+          transferred_amount?: number
+          status?: 'pending' | 'paid' | 'failed'
+          failure_reason?: string | null
+          attempts?: number
+          paid_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          amount?: number
+          lessons_count?: number
+          provider_payout_id?: string | null
+          provider_transfer_id?: string | null
+          transferred_amount?: number
+          status?: 'pending' | 'paid' | 'failed'
+          failure_reason?: string | null
+          attempts?: number
+          paid_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'teacher_payouts_teacher_id_fkey'
             columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'teacher_profiles'

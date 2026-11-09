@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Send } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/Avatar'
@@ -26,10 +27,13 @@ export function ChatThread({
   target,
   currentUserId,
   otherPartyName,
+  headerLink,
 }: {
   target: ChatTarget
   currentUserId: string
   otherPartyName: string
+  /** A button at the right of the header, e.g. to the teacher's profile. */
+  headerLink?: { href: string; label: string }
 }) {
   const column = target.kind === 'conversation' ? 'conversation_id' : 'support_thread_id'
   const targetId = target.id
@@ -95,8 +99,16 @@ export function ChatThread({
 
   return (
     <div className="flex h-[32rem] flex-col rounded-2xl border border-slate-200 bg-white shadow-card">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <p className="font-semibold text-slate-900">{otherPartyName}</p>
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <p className="min-w-0 truncate font-semibold text-slate-900">{otherPartyName}</p>
+        {headerLink ? (
+          <Link
+            href={headerLink.href}
+            className="flex-shrink-0 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-800 shadow-md transition-shadow hover:shadow-lg"
+          >
+            {headerLink.label}
+          </Link>
+        ) : null}
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">

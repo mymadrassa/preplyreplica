@@ -21,6 +21,7 @@ import { PageNav } from './PageNav'
 import { ResizableFrame } from './ResizableFrame'
 import { ScriptSelect } from './ScriptSelect'
 import { SurahSearch } from './SurahSearch'
+import { JuzSelect } from './JuzSelect'
 import { ThemeToggle } from './ThemeToggle'
 import { MarksSummary } from './MarksSummary'
 
@@ -47,6 +48,11 @@ interface MushafViewerProps {
    * moves the shared page for whoever controls it, otherwise only this viewer's page.
    */
   sidePanelTop?: (controls: { onHide: (() => void) | null; goToPage: (page: number) => void }) => ReactNode
+  /**
+   * In a student's personal space: their shared sessions with teachers, whose
+   * marks and drawings are shown too, read-only and labelled "Teacher".
+   */
+  linked?: { sessionId: string; teacherId: string }[]
 }
 
 type MarkFilter = 'all' | 'teacher'
@@ -70,8 +76,11 @@ interface Selection {
   committed: boolean
 }
 
-export function MushafViewer({ supabase, role, sessionId, teacherId, currentUserId, initialPage, bookingId = null, lessons = [], onError, openAtPage = null, sidePanelTop }: MushafViewerProps) {
-  const sync = useMushafSync({ supabase, sessionId, currentUserId, initialPage, bookingId })
+export function MushafViewer({ supabase, role, sessionId, teacherId, currentUserId, initialPage, bookingId = null, lessons = [], onError, openAtPage = null, sidePanelTop, linked = [] }: MushafViewerProps) {
+  const linkedSessionIds = useMemo(() => linked.map((l) => l.sessionId), [linked])
+  const sync = useMushafSync({ supabase, sessionId, currentUserId, initialPage, bookingId, linkedSessionIds })
+  // Whose marks count as the teacher's: this session's teacher, or the linked teachers in a personal space.
+  const teacherIds = useMemo(() => new Set(teacherId ? [teacherId] : linked.map((l) => l.teacherId)), [teacherId, linked])
   // A student can look elsewhere (e.g. via the surah search) without moving the teacher's page;
   // `detachedPage` is that private view, and null means following the shared page.
   // Only for someone who can't move the shared page; the teacher's view always is the shared page.
@@ -93,7 +102,8 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
 
   const reportError = onError ?? (() => {})
   const can = capabilitiesFor(role)
-  const nameOf = (authorId: string) => authorLabel(role, authorId, teacherId)
+  const canFilterByAuthor = can.canFilterByAuthor || linked.length > 0
+  const nameOf = (authorId: string) => authorLabel(role, authorId, teacherId, currentUserId)
 
   const selectedWords = useMemo(() => {
     if (!page || !selection) return []
@@ -107,17 +117,17 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
   const visibleAnnotations = useMemo(
     () =>
       sync.annotations.filter(
-        (a) => (filter === 'all' || a.authorId === teacherId) && (lessonFilter === 'all' || a.bookingId === lessonFilter)
+        (a) => (filter === 'all' || teacherIds.has(a.authorId)) && (lessonFilter === 'all' || a.bookingId === lessonFilter)
       ),
-    [sync.annotations, filter, teacherId, lessonFilter]
+    [sync.annotations, filter, teacherIds, lessonFilter]
   )
   const visibleStrokes = useMemo(
     () =>
       sync.strokes.filter(
         (x) =>
-          !hiddenStrokeIds.has(x.id) && (filter === 'all' || x.authorId === teacherId) && (lessonFilter === 'all' || x.bookingId === lessonFilter)
+          !hiddenStrokeIds.has(x.id) && (filter === 'all' || teacherIds.has(x.authorId)) && (lessonFilter === 'all' || x.bookingId === lessonFilter)
       ),
-    [sync.strokes, filter, teacherId, lessonFilter, hiddenStrokeIds]
+    [sync.strokes, filter, teacherIds, lessonFilter, hiddenStrokeIds]
   )
   const myLastStroke = [...sync.strokes].reverse().find((x) => x.page === viewPage && x.authorId === currentUserId)
   // Only this page's comments: a verse running onto the next page doesn't drag its comments along.
@@ -278,22 +288,24 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
             <Icon name="chevron-right" />
           </button>
         ) : null}
-        <DrawingToolbar
-          tool={tool}
-          penColor={penColor}
-          canUndo={!!myLastStroke}
-          dark={dark}
-          onToggleTool={(next) => {
-            clearSelection()
-            setTool((current) => (current === next ? null : next))
-          }}
-          onPenColor={setPenColor}
-          onUndo={async () => {
-            if (!myLastStroke) return
-            const { error } = await sync.deleteStroke(myLastStroke.id)
-            if (error) reportError(error)
-          }}
-        />
+        {can.canDraw ? (
+          <DrawingToolbar
+            tool={tool}
+            penColor={penColor}
+            canUndo={!!myLastStroke}
+            dark={dark}
+            onToggleTool={(next) => {
+              clearSelection()
+              setTool((current) => (current === next ? null : next))
+            }}
+            onPenColor={setPenColor}
+            onUndo={async () => {
+              if (!myLastStroke) return
+              const { error } = await sync.deleteStroke(myLastStroke.id)
+              if (error) reportError(error)
+            }}
+          />
+        ) : null}
         <div className="ml-auto flex items-center gap-2">
           {detachedPage !== null ? (
             <button
@@ -310,6 +322,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
             </button>
           ) : null}
           <SurahSearch onSelect={goToPage} />
+          <JuzSelect currentPage={viewPage} onSelect={goToPage} />
           <ScriptSelect script={script} onChange={setScript} />
           <ThemeToggle dark={dark} onChange={setDark} />
           <HintTooltip active={pending}>
@@ -356,6 +369,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
               {hasMarks ? (
                 <MarksSummary
                   pageNumber={viewPage}
+                  page={page!}
                   blocks={blocks}
                   verseNotes={verseNotes}
                   selectedWordIds={selectedIds}
@@ -394,6 +408,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
                 <AnnotationToolbar
                   key={selectedWords.map((w) => w.id).join(',')}
                   markKinds={can.markKinds}
+                  readOnlyMessage="Only your teacher can mark this Mushaf. Add your own marks in My Mushaf, where your teacher's marks show too."
                   words={selectedWords}
                   title={describeSelection(selectedWords, page.surahs)}
                   existing={visibleAnnotations}
@@ -424,7 +439,7 @@ export function MushafViewer({ supabase, role, sessionId, teacherId, currentUser
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-        {can.canFilterByAuthor ? (
+        {canFilterByAuthor ? (
           <div className="flex items-center gap-2">
             <span className="text-slate-500">Show marks:</span>
             {(['all', 'teacher'] as const).map((value) => (

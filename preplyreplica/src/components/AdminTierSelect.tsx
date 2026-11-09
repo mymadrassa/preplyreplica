@@ -43,7 +43,7 @@ export function AdminTierSelect({ teacherId, tier, locked }: { teacherId: string
         <option value="auto">Automatic (now {TIERS[tier].label})</option>
         {TIER_ORDER.map((t) => (
           <option key={t} value={t}>
-            {TIERS[t].label} · {Math.round(TIERS[t].commission * 100)}% (fixed)
+            {TIERS[t].label} · £{TIERS[t].rate}/h, {Math.round(TIERS[t].commission * 100)}% (fixed)
           </option>
         ))}
       </select>

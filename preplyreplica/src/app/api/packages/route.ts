@@ -5,13 +5,14 @@ import { getPaymentProvider, paymentErrorMessage } from '@/lib/payments'
 import { PACKAGE, isTier, packagePrice, toPence } from '@/lib/pricing'
 import { loadBookableTeacher } from '@/lib/bookable'
 import { TRIAL_FIRST_MESSAGE, hasHadFirstLesson } from '@/lib/trialRule'
+import { loadParticipants } from '@/lib/participantNames'
 
 const schema = z.object({ teacherId: z.string().uuid() })
 
 /**
- * Buys a 10-lesson package with a teacher: paid upfront (charged at once) at
- * 10% off. The teacher is paid per completed lesson; the platform's share is
- * the discounted margin.
+ * Buys a 10-lesson package with a teacher: paid upfront to My Madrassa
+ * (charged at once) at 10% off. The teacher is paid their rate for each lesson
+ * given, monthly; My Madrassa keeps the discounted margin less the card fee.
  */
 export async function POST(request: Request) {
   const supabase = createServerClient()
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
   const provider = getPaymentProvider(teacher.payment_provider)
   const tier = isTier(teacher.tier) ? teacher.tier : 'starter'
-  const pricing = packagePrice(teacher.hourly_rate, tier, provider.fees)
+  const pricing = packagePrice(tier, provider.fees)
 
   const { data: pkg, error } = await service
     .from('lesson_packages')
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
       refund_per_lesson: toPence(pricing.perLesson),
       tier,
       provider: provider.id,
+      charge_model: 'platform',
     })
     .select('id')
     .single()
@@ -72,13 +74,12 @@ export async function POST(request: Request) {
   try {
     const { url, checkoutId, paymentId } = await provider.createCheckout({
       amount: toPence(pricing.price),
-      platformFee: Math.max(0, toPence(pricing.platformNet)),
       currency: 'gbp',
-      payeeAccountId: teacher.payout_account_id,
       capture: 'automatic',
-      description: `${PACKAGE.lessons}-lesson package`,
+      description: `${PACKAGE.lessons}-lesson package with ${(await loadParticipants([teacherId])).get(teacherId)?.name ?? 'your teacher'}`,
       reference: pkg.id,
-      successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/bookings?package=success`,
+      metadata: { teacher_id: teacherId, kind: 'package' },
+      successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/bookings?package=${pkg.id}`,
       cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL}/teachers/${teacherId}`,
     })
     await service.from('lesson_packages').update({ provider_checkout_id: checkoutId, provider_payment_id: paymentId }).eq('id', pkg.id)

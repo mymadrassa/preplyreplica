@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { MIN_PASSWORD_LENGTH } from '@/lib/constants'
+import { firstNameSchema, fullNameFrom, lastNameSchema } from '@/lib/names'
 import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { completeSignup } from '@/lib/auth/completeSignup'
 import { normalizePhone, PHONE_HINT } from '@/lib/phone'
 
 const bodySchema = z.object({
+  firstName: firstNameSchema,
+  lastName: lastNameSchema,
   email: z.string().email('Enter a valid email address.'),
   password: z.string().min(MIN_PASSWORD_LENGTH, `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`),
   role: z.enum(['student', 'teacher']),
@@ -28,14 +31,14 @@ export async function POST(request: Request) {
   if (!parseResult.success) {
     return NextResponse.json({ error: parseResult.error.issues[0]?.message ?? 'Invalid details.' }, { status: 400 })
   }
-  const { email, password, role, phone, gender } = parseResult.data
+  const { firstName, lastName, email, password, role, phone, gender } = parseResult.data
 
   const supabase = createServerClient()
   const serviceClient = createSupabaseServiceRoleClient()
 
   const result = await completeSignup(
     supabase,
-    { email, password, role, phone, gender, emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?type=email` },
+    { email, password, role, phone, gender, fullName: fullNameFrom(firstName, lastName), emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?type=email` },
     serviceClient
   )
 

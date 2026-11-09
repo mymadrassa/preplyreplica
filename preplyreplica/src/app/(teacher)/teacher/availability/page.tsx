@@ -62,7 +62,7 @@ export default async function TeacherAvailabilityPage({ searchParams }: TeacherA
     supabase.from('availability_exceptions').select('*').eq('teacher_id', userId).order('exception_date', { ascending: true }),
     supabase
       .from('bookings')
-      .select('id, start_at, end_at, subject, status, teacher_confirmed_at, is_trial, profiles!student_id(full_name, email)')
+      .select('id, start_at, end_at, subject, status, is_trial, profiles!student_id(full_name, email)')
       .eq('teacher_id', userId)
       .gte('start_at', rangeStart.toISOString())
       .lte('start_at', rangeEnd.toISOString()),

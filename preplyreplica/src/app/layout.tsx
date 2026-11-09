@@ -9,7 +9,7 @@ const quranFont = Amiri_Quran({ weight: '400', subsets: ['arabic'], variable: '-
 
 export const metadata: Metadata = {
   title: 'Preply Clone',
-  description: 'A tutor marketplace built with Next.js, Supabase and Jitsi.',
+  description: 'Online Quran lessons with a shared Mushaf and live video.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

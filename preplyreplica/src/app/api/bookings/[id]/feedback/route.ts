@@ -18,8 +18,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 /**
- * Saves the caller's feedback on a lesson, or records a skip so the popup
- * stops. A student's public feedback also becomes a review on the teacher's
+ * Saves the caller's feedback on a lesson that went well (ratings per
+ * criterion), or records a skip so the popup stops; problems go through
+ * ../report instead. A student's public feedback also becomes a review on the teacher's
  * profile (which updates their rating).
  */
 export async function POST(request: Request, { params }: { params: { id: string } }) {
@@ -60,9 +61,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
   const row: Database['public']['Tables']['session_feedback']['Insert'] =
     'rating' in feedback
-      ? { ...base, status: 'given' as const, rating: feedback.rating, comment: feedback.comment || null, visibility: feedback.visibility, tags: [] }
+      ? { ...base, status: 'given' as const, rating: feedback.rating, comment: feedback.comment || null, visibility: feedback.visibility, tags: [], criteria: feedback.criteria }
       : 'tags' in feedback
-        ? { ...base, status: 'given' as const, rating: null, comment: null, visibility: null, tags: feedback.tags }
+        ? { ...base, status: 'given' as const, rating: null, comment: null, visibility: null, tags: feedback.tags, criteria: feedback.criteria }
         : { ...base, status: 'skipped' as const, rating: null, comment: null, visibility: null, tags: [] }
 
   const { error } = await service.from('session_feedback').upsert(row, { onConflict: 'booking_id,author_id' })

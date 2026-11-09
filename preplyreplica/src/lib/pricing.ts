@@ -1,7 +1,7 @@
-// The platform's pricing model (Pricing_Model_GBP): teachers set their own
-// hourly rate and always receive all of it; the platform adds a commission
-// that depends on the teacher's tier, plus a flat booking fee that covers the
-// card processing fee. Amounts are in pounds; toPence() converts for payments.
+// The platform's pricing model (Pricing_Model_GBP): a teacher's hourly rate is
+// set by their tier (a promotion is a raise) and they always receive all of
+// it; the platform adds a commission that falls as the tier rises, plus a flat
+// booking fee that covers the card processing fee. Amounts are in pounds; toPence() converts for payments.
 //
 // Pure and used on both server and client (the booking form), so it never
 // imports the payment provider: the server passes the provider's own fees.
@@ -10,6 +10,8 @@ export type Tier = 'starter' | 'mid' | 'top'
 
 export interface TierRule {
   label: string
+  /** What the teacher receives per one-hour lesson at this tier (pounds). */
+  rate: number
   commission: number
   /** Criteria to reach this tier (none for the entry tier). */
   minMonths?: number
@@ -22,9 +24,9 @@ export interface TierRule {
 }
 
 export const TIERS: Record<Tier, TierRule> = {
-  starter: { label: 'Starter', commission: 0.4 },
-  mid: { label: 'Mid', commission: 0.35, minMonths: 3, minLessons: 40, minRating: 4.7, maxCancelRate: 0.1 },
-  top: { label: 'Top', commission: 0.3, minMonths: 6, minLessons: 100, minRating: 4.8, maxCancelRate: 0.1, minRetention: 0.5 },
+  starter: { label: 'Starter', rate: 15, commission: 0.4 },
+  mid: { label: 'Mid', rate: 17.5, commission: 0.35, minMonths: 3, minLessons: 40, minRating: 4.7, maxCancelRate: 0.1 },
+  top: { label: 'Top', rate: 20, commission: 0.3, minMonths: 6, minLessons: 100, minRating: 4.8, maxCancelRate: 0.1, minRetention: 0.5 },
 }
 export const TIER_ORDER: Tier[] = ['starter', 'mid', 'top']
 
@@ -38,6 +40,11 @@ export const PACKAGE = { lessons: 10, discount: 0.1, validityMonths: 4 }
 /** Card processing rate for estimates when the provider's own isn't passed (e.g. in the browser). */
 export const DEFAULT_PROCESSING_FEES = { percentage: 0.015, fixed: 0.2 }
 export type ProcessingFees = typeof DEFAULT_PROCESSING_FEES
+
+/** The teacher's hourly rate at a tier. */
+export function tierRate(tier: Tier): number {
+  return TIERS[tier].rate
+}
 
 export function isTier(value: unknown): value is Tier {
   return value === 'starter' || value === 'mid' || value === 'top'
@@ -57,8 +64,9 @@ function processingFee(amount: number, fees: ProcessingFees) {
   return round2(amount * fees.percentage + fees.fixed)
 }
 
-/** A one-hour lesson with a teacher at their rate and tier. */
-export function lessonPrice(rate: number, tier: Tier, fees: ProcessingFees = DEFAULT_PROCESSING_FEES): LessonPrice {
+/** A one-hour lesson with a teacher at this tier. */
+export function lessonPrice(tier: Tier, fees: ProcessingFees = DEFAULT_PROCESSING_FEES): LessonPrice {
+  const rate = tierRate(tier)
   const commission = round2(rate * TIERS[tier].commission)
   const studentPays = round2(rate + commission + BOOKING_FEE)
   const fee = processingFee(studentPays, fees)
@@ -88,7 +96,8 @@ export interface PackagePrice {
 }
 
 /** The 10-lesson package, paid upfront; the discount comes out of the platform's margin, never the teacher's pay. */
-export function packagePrice(rate: number, tier: Tier, fees: ProcessingFees = DEFAULT_PROCESSING_FEES): PackagePrice {
+export function packagePrice(tier: Tier, fees: ProcessingFees = DEFAULT_PROCESSING_FEES): PackagePrice {
+  const rate = tierRate(tier)
   const lessons = PACKAGE.lessons
   // From the unrounded lesson price, as in the pricing sheet (Mid: 10 × £25.625 = £256.25).
   const normalPrice = round2(lessons * (rate * (1 + TIERS[tier].commission) + BOOKING_FEE))

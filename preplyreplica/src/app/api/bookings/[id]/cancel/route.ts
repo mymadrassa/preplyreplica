@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   await db.from('bookings').update({ status: 'cancelled' } as any).eq('id', booking.id)
-  if (payment) await db.from('payments').update({ status: 'refunded' } as any).eq('id', payment.id)
+  if (payment) await db.from('payments').update({ status: 'refunded', refunded_amount: payment.amount } as any).eq('id', payment.id)
   // A package lesson goes back into the package instead of being refunded.
   if (packageId) await returnPackageLesson(packageId)
 

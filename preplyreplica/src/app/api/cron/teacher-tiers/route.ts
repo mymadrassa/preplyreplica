@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     promoted.push({ teacherId: teacher.id, from: current, to: next })
     const contact = teacher.profiles as { full_name: string | null; email: string | null } | null
     if (contact?.email) {
-      await sendTierPromotionEmail({ to: contact.email, teacherName: contact.full_name || 'there', tierLabel: TIERS[next].label, commissionPercent: Math.round(TIERS[next].commission * 100) })
+      await sendTierPromotionEmail({ to: contact.email, teacherName: contact.full_name || 'there', tierLabel: TIERS[next].label, rate: TIERS[next].rate })
     }
   }
 

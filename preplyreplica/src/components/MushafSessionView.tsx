@@ -18,6 +18,8 @@ interface MushafSessionViewProps {
   openAtPage?: number | null
   /** Shows the homework to-do above the summary cards. */
   homework?: { items: HomeworkItem[]; canTick: boolean; showTeacher?: boolean; assign?: { href: string; label: string } | null }
+  /** In a student's own Mushaf: their shared sessions with teachers, whose marks show read-only. */
+  linked?: { sessionId: string; teacherId: string }[]
 }
 
 /** App-side adapter: gives the portable Mushaf package this app's Supabase client, toast surface and homework panel. */

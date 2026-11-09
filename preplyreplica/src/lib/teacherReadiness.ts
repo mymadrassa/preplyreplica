@@ -2,8 +2,6 @@
 // approval". The dashboard status bar, the top-bar notifications, the submit
 // API and the admin approve check all use this, so they can never disagree.
 
-export const MIN_HOURLY_RATE = 8
-
 export interface TeacherReadinessInput {
   headline: string | null
   bio: string | null
@@ -38,13 +36,12 @@ export interface TeacherReadiness {
 }
 
 /** Same minimums the /api/teacher/onboard schema enforces. */
-export function isProfileComplete(t: Pick<TeacherReadinessInput, 'headline' | 'bio' | 'subjects' | 'languages' | 'hourly_rate'>): boolean {
+export function isProfileComplete(t: Pick<TeacherReadinessInput, 'headline' | 'bio' | 'subjects' | 'languages'>): boolean {
   return (
     (t.headline?.trim().length ?? 0) >= 10 &&
     (t.bio?.trim().length ?? 0) >= 20 &&
     (t.subjects?.length ?? 0) > 0 &&
-    (t.languages?.length ?? 0) > 0 &&
-    Number(t.hourly_rate) >= MIN_HOURLY_RATE
+    (t.languages?.length ?? 0) > 0
   )
 }
 
@@ -58,7 +55,7 @@ export function getTeacherReadiness(input: TeacherReadinessInput): TeacherReadin
 
   const missing: MissingItem[] = []
   if (!profile)
-    missing.push({ key: 'profile', title: 'Complete your profile', description: 'Add a headline, bio, subjects, languages and your rate.', href: '/teacher/profile/details' })
+    missing.push({ key: 'profile', title: 'Complete your profile', description: 'Add a headline, bio, subjects and languages.', href: '/teacher/profile/details' })
   if (!phone)
     missing.push({ key: 'phone', title: 'Add your WhatsApp number', description: 'Private: we contact you on WhatsApp about lessons, never shown to students.', href: '/teacher/profile/details' })
   if (!gender)

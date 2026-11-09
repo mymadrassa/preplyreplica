@@ -4,15 +4,16 @@ import { TIERS, packagePrice, type Tier } from '@/lib/pricing'
 import type { TierProgress as Progress } from '@/lib/tiers'
 
 /** The teacher's tier, what students pay them at it, and how far the next tier is. */
-export function TierProgress({ tier, rate, progress, locked }: { tier: Tier; rate: number; progress: Progress | null; locked: boolean }) {
+export function TierProgress({ tier, progress, locked }: { tier: Tier; progress: Progress | null; locked: boolean }) {
   const rule = TIERS[tier]
-  const price = packagePrice(rate, tier)
+  const price = packagePrice(tier)
+  const rate = rule.rate
   return (
     <Card>
       <TrendingUp className="h-5 w-5 text-brand-600" aria-hidden="true" />
       <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Your tier</p>
       <p className="mt-2 text-3xl font-semibold text-slate-900">
-        {rule.label} <span className="text-base font-normal text-slate-500">· {Math.round(rule.commission * 100)}% commission</span>
+        {rule.label} <span className="text-base font-normal text-slate-500">· £{rate.toFixed(2)}/hour</span>
       </p>
       <p className="mt-1 text-sm text-slate-600">
         You receive £{rate.toFixed(2)} per lesson; students pay £{price.perLesson.toFixed(2)} a lesson in their package.
@@ -20,7 +21,7 @@ export function TierProgress({ tier, rate, progress, locked }: { tier: Tier; rat
       {progress && !locked ? (
         <div className="mt-4">
           <div className="flex justify-between text-xs font-medium text-slate-600">
-            <span>Next: {TIERS[progress.next].label} ({Math.round(TIERS[progress.next].commission * 100)}% commission)</span>
+            <span>Next raise: £{TIERS[progress.next].rate.toFixed(2)}/h at {TIERS[progress.next].label}</span>
             <span>{Math.round(progress.ratio * 100)}%</span>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={Math.round(progress.ratio * 100)} aria-valuemin={0} aria-valuemax={100}>
@@ -28,7 +29,7 @@ export function TierProgress({ tier, rate, progress, locked }: { tier: Tier; rat
           </div>
           {progress.missing.length ? (
             <p className="mt-2 text-sm text-slate-600">
-              {progress.missing[0]} to reach {TIERS[progress.next].label}
+              {progress.missing[0]} to your next raise
               {progress.missing.length > 1 ? <span className="block text-xs text-slate-400">Also needed: {progress.missing.slice(1).join(', ')}</span> : null}
             </p>
           ) : (

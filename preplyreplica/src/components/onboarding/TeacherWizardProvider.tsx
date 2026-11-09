@@ -7,7 +7,6 @@ export interface TeacherWizardState {
   languages: string[]
   headline: string
   bio: string
-  hourlyRate: string
   videoUrl: string
   // Set right after a successful submit, once the wizard's other fields
   // have already been reset -- the one piece of state StepPayouts needs
@@ -20,7 +19,6 @@ const EMPTY_STATE: TeacherWizardState = {
   languages: [],
   headline: '',
   bio: '',
-  hourlyRate: '25',
   videoUrl: '',
   onboardingUrl: null,
 }

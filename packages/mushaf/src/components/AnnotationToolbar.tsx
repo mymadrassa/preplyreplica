@@ -9,10 +9,10 @@ import { HIGHLIGHT_SWATCH, Icon, type IconName } from './icons'
 
 const COLORS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink']
 
-const ERRORS: { value: ErrorType; label: string; icon: IconName }[] = [
-  { value: 'memorisation', label: 'Memorisation error', icon: 'memorisation' },
-  { value: 'tajwid', label: 'Tajwid error', icon: 'tajwid' },
-  { value: 'hesitation', label: 'Hesitation', icon: 'hesitation' },
+export const ERRORS: { value: ErrorType; label: string; hint: string; icon: IconName }[] = [
+  { value: 'memorisation', label: 'Memorisation error', hint: 'Forgot or changed a word', icon: 'memorisation' },
+  { value: 'tajwid', label: 'Tajwid error', hint: 'A recitation rule not applied', icon: 'tajwid' },
+  { value: 'hesitation', label: 'Hesitation', hint: 'Stopped or repeated before getting it right', icon: 'hesitation' },
 ]
 
 type Panel = 'highlight' | 'error' | 'note'
@@ -40,13 +40,17 @@ interface AnnotationToolbarProps {
   onClose: () => void
   /** Your existing comment on exactly this selection: the comment field opens with it and saving replaces it. */
   editableNote?: { id: string; text: string } | null
+  /** Shown instead of the icons when this user can't add any kind of mark. */
+  readOnlyMessage?: string
 }
 
 // Floating toolbar next to the selection: one icon per kind of mark, each
-// opening its own options. Marks apply to every selected word. Students only
-// get the comment icon.
-export function AnnotationToolbar({ markKinds, words, title, existing, currentUserId, onAdd, onRemove, onError, onClose, editableNote = null }: AnnotationToolbarProps) {
+// opening its own options. Marks apply to every selected word. In a shared
+// Mushaf a student has none: the toolbar then says where to add their own.
+export function AnnotationToolbar({ markKinds, words, title, existing, currentUserId, onAdd, onRemove, onError, onClose, editableNote = null, readOnlyMessage }: AnnotationToolbarProps) {
   const [panel, setPanel] = useState<Panel | null>(null)
+  const [errorListOpen, setErrorListOpen] = useState(true)
+  const [busyError, setBusyError] = useState<ErrorType | null>(null)
   const [note, setNote] = useState(editableNote?.text ?? '')
   const panels = (['highlight', 'error', 'note'] as const).filter((kind) => markKinds.includes(kind))
 
@@ -57,9 +61,12 @@ export function AnnotationToolbar({ markKinds, words, title, existing, currentUs
 
   // What each selected word currently has from you, so a button shows as chosen only when it holds for the whole selection.
   const colorByWord = words.map((w) => mine.find((a) => a.kind === 'highlight' && a.wordRef === w.id)?.color ?? null)
-  const errorByWord = words.map((w) => mine.find((a) => a.kind === 'error' && a.wordRef === w.id)?.errorType ?? null)
   const currentColor = commonValue(colorByWord)
-  const currentError = commonValue(errorByWord)
+  // A word can carry several errors: each type is ticked when every selected word has it from you.
+  const errorMarks = (type: ErrorType) => mine.filter((a) => a.kind === 'error' && a.errorType === type)
+  const [ticked, setTicked] = useState<Set<ErrorType>>(
+    () => new Set(ERRORS.map((e) => e.value).filter((type) => words.every((w) => errorMarks(type).some((a) => a.wordRef === w.id))))
+  )
 
   async function replaceMarks(kind: 'highlight' | 'error', make: ((word: MushafWord) => NewAnnotation) | null) {
     const stale = mine.filter((a) => a.kind === kind).map((a) => a.id)
@@ -79,9 +86,27 @@ export function AnnotationToolbar({ markKinds, words, title, existing, currentUs
   const chooseColor = (color: HighlightColor | null) =>
     replaceMarks('highlight', color ? (word) => ({ kind: 'highlight', color, errorType: null, noteText: null, ...base(word) }) : null)
 
-  // Choosing the error everyone already has clears it (toggle); any other choice replaces it.
-  const chooseError = (type: ErrorType) =>
-    replaceMarks('error', currentError === type ? null : (word) => ({ kind: 'error', color: null, errorType: type, noteText: null, ...base(word) }))
+  // Ticking an error adds it to every selected word that doesn't have it yet; unticking removes it. Other errors stay.
+  async function toggleError(type: ErrorType) {
+    setBusyError(type)
+    const on = ticked.has(type)
+    if (on) {
+      const { error } = await onRemove(errorMarks(type).map((a) => a.id))
+      if (error) onError(error)
+    } else {
+      const missing = words.filter((w) => !errorMarks(type).some((a) => a.wordRef === w.id))
+      const { error } = await onAdd(missing.map((word) => ({ kind: 'error', color: null, errorType: type, noteText: null, ...base(word) })))
+      if (error) onError(error)
+    }
+    setBusyError(null)
+    setTicked((current) => {
+      const next = new Set(current)
+      if (on) next.delete(type)
+      else next.add(type)
+      return next
+    })
+  }
+  const tickedLabel = ERRORS.filter((e) => ticked.has(e.value)).map((e) => e.label).join(', ')
 
   async function submitNote() {
     const text = note.trim()
@@ -139,6 +164,8 @@ export function AnnotationToolbar({ markKinds, words, title, existing, currentUs
         </div>
       </div>
 
+      {!panels.length && readOnlyMessage ? <p className="text-xs text-slate-600">{readOnlyMessage}</p> : null}
+
       {panel === 'highlight' ? (
         <div className="flex items-center gap-2">
           <button
@@ -165,22 +192,48 @@ export function AnnotationToolbar({ markKinds, words, title, existing, currentUs
       ) : null}
 
       {panel === 'error' ? (
-        <div className="flex items-center gap-2">
-          {ERRORS.map((error) => (
-            <button
-              key={error.value}
-              type="button"
-              title={error.label}
-              aria-label={error.label}
-              aria-pressed={currentError === error.value}
-              onClick={() => chooseError(error.value)}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                currentError === error.value ? 'border-brand-500 bg-brand-50 text-brand-700 ring-2 ring-brand-500' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Icon name={error.icon} />
-            </button>
-          ))}
+        <div className="relative">
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={errorListOpen}
+            onClick={() => setErrorListOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <span className="truncate">{tickedLabel || 'Choose the errors…'}</span>
+            <Icon name="chevron-down" className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform ${errorListOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {errorListOpen ? (
+            <ul role="listbox" aria-multiselectable="true" aria-label="Errors" className="mt-1 space-y-0.5 rounded-xl border border-slate-200 bg-white p-1">
+              {ERRORS.map((error) => {
+                const on = ticked.has(error.value)
+                return (
+                  <li key={error.value}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={on}
+                      disabled={busyError !== null}
+                      onClick={() => toggleError(error.value)}
+                      className={`flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors disabled:opacity-60 ${on ? 'bg-red-50' : 'hover:bg-slate-50'}`}
+                    >
+                      <span
+                        className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${on ? 'border-red-600 bg-red-600 text-white' : 'border-slate-300 bg-white'}`}
+                        aria-hidden="true"
+                      >
+                        {on ? <Icon name="check" className="h-3 w-3" /> : null}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-slate-800">{error.label}</span>
+                        <span className="block text-xs text-slate-500">{error.hint}</span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : null}
+          <p className="mt-1 text-[11px] text-slate-400">Tick as many as apply; each one is saved straight away.</p>
         </div>
       ) : null}
 

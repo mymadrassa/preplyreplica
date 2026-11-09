@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 
 const presenceSchema = z.object({ event: z.enum(['joined', 'left']) })
@@ -35,6 +36,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const now = new Date().toISOString()
 
   if (event === 'joined') {
+    // mushaf_sessions belongs to the Mushaf package's schema, not the app's generated types.
+    const { data: shared } = await (db as unknown as SupabaseClient)
+      .from('mushaf_sessions')
+      .select('current_page')
+      .eq('student_id', booking.student_id)
+      .eq('teacher_id', booking.teacher_id)
+      .maybeSingle<{ current_page: number }>()
+    if (shared?.current_page) {
+      await db.from('lesson_pages').upsert({ booking_id: params.id, page: shared.current_page }, { onConflict: 'booking_id,page', ignoreDuplicates: true })
+    }
     // First join only — a rejoin shouldn't overwrite the original join time,
     // so this update is scoped to rows where the column is still null.
     const column = isStudent ? 'student_joined_at' : 'teacher_joined_at'

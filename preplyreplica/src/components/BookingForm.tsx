@@ -15,7 +15,6 @@ import type { AvailabilitySlot, AvailabilityException, OccupyingBooking } from '
 interface BookingFormProps {
   teacher: {
     id: string
-    hourly_rate: number
     tier: Tier
     subjects: string[]
     languages: string[]
@@ -132,7 +131,7 @@ export function BookingForm({ teacher, activePackage = null, packageRequired = f
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 pr-14 sm:pr-6">
       <h2 className="text-xl font-semibold text-slate-900">{trial ? 'Book your trial lesson' : 'Book a lesson'}</h2>
       <Select label="Subject" name="subject" value={subject} onChange={(event) => setSubject(event.target.value)} options={teacher.subjects.map((subject) => ({ value: subject, label: subject }))} required />
       <Select label="Language" name="language" value={language} onChange={(event) => setLanguage(event.target.value)} options={teacher.languages.map((language) => ({ value: language, label: language }))} required />
@@ -156,29 +155,6 @@ export function BookingForm({ teacher, activePackage = null, packageRequired = f
           </span>
         </p>
       )}
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm">
-        {!trial ? (
-          <p className="font-semibold text-slate-900">Paid with your package</p>
-        ) : (
-          <>
-            <dl className="space-y-1 text-slate-600">
-              <div className="flex justify-between">
-                <dt>{TRIAL.minutes}-minute trial</dt>
-                <dd>£{(pricing.studentPays - pricing.bookingFee).toFixed(2)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Booking fee</dt>
-                <dd>£{pricing.bookingFee.toFixed(2)}</dd>
-              </div>
-            </dl>
-            <p className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-semibold text-slate-900">
-              <span>Total</span>
-              <span>£{pricing.studentPays.toFixed(2)}</span>
-            </p>
-          </>
-        )}
-      </div>
 
       <div>
         <span className="mb-2 block text-sm font-medium text-slate-700">Pick a time</span>
@@ -205,10 +181,37 @@ export function BookingForm({ teacher, activePackage = null, packageRequired = f
         ) : null}
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm">
+        {!trial ? (
+          <p className="font-semibold text-slate-900">Paid with your package</p>
+        ) : (
+          <>
+            <dl className="space-y-1 text-slate-600">
+              <div className="flex justify-between">
+                <dt>{TRIAL.minutes}-minute trial</dt>
+                <dd>£{(pricing.studentPays - pricing.bookingFee).toFixed(2)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Booking fee</dt>
+                <dd>£{pricing.bookingFee.toFixed(2)}</dd>
+              </div>
+            </dl>
+            <p className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-semibold text-slate-900">
+              <span>Total</span>
+              <span>£{pricing.studentPays.toFixed(2)}</span>
+            </p>
+          </>
+        )}
+      </div>
+
       <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
         <p>
-          Free cancellation up to {CANCELLATION_CUTOFF_HOURS} hours before your lesson for a full refund. Cancelling later than that, or not at all, is non-refundable.
+          Free cancellation up to {CANCELLATION_CUTOFF_HOURS} hours before your lesson for a full refund. Cancelling later than that, or not at all, is non-refundable. You pay My
+          Madrassa, which pays your teacher; you&apos;ll get a receipt with every fee.{' '}
+          <a href="/terms" target="_blank" className="font-medium text-brand-700 underline">
+            Terms
+          </a>
         </p>
       </div>
 

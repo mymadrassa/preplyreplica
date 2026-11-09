@@ -36,12 +36,18 @@ export interface MarkItem {
   noteText: string | null
   /** Every annotation row behind this item (one per word for highlights/errors). */
   annotationIds: string[]
+  /** The words of this verse the mark applies to, in reading order. */
+  words: MushafWord[]
   createdAt: string
 }
 
-/** A run of contiguous words carrying the same marks, shown as a single summary card. */
+/** One verse's marks, shown as a single summary card: every marked word in it and every mark on them. */
 export interface MarkBlock {
+  /** `surah:ayah`. */
   key: string
+  surah: number
+  ayah: number
+  /** The verse's marked words, in reading order. */
   words: MushafWord[]
   items: MarkItem[]
 }
@@ -53,54 +59,48 @@ function itemKey(a: MushafAnnotation): string {
 }
 
 /**
- * Groups the page's marked words into summary blocks: consecutive words with
- * identical marks merge into one block, so a selected phrase reads as one card
- * instead of one per word. Words with no marks produce no block. Verse-level
- * notes (no word) are handled separately by the caller.
+ * Groups the page's marks by verse: one summary block per verse holding any
+ * mark, listing each mark (a highlight colour, an error type, a comment) with
+ * the words of that verse it applies to. A comment spanning several verses
+ * goes with the first of them on this page, so it isn't repeated.
  */
 export function buildMarkBlocks(page: MushafPageData, annotations: MushafAnnotation[]): MarkBlock[] {
-  const blocks: MarkBlock[] = []
-  let current: { signature: string; block: MarkBlock; byKey: Map<string, MarkItem> } | null = null
+  const blocks = new Map<string, { block: MarkBlock; byKey: Map<string, MarkItem>; wordIds: Set<string> }>()
+  const noteVerse = new Map<string, string>()
 
   for (const word of flattenWords(page)) {
-    const covering = annotations.filter((a) => a.wordRef && annotationCoversWord(a, word.id, page))
-    if (!covering.length) {
-      current = null
-      continue
-    }
-
-    const signature = covering.map(itemKey).sort().join('|')
-    if (current && current.signature === signature) {
-      current.block.words.push(word)
-      // A highlight/error is one row per word; a note is one row for the whole range, so it is not repeated.
-      for (const a of covering) if (a.kind !== 'note') current.byKey.get(itemKey(a))?.annotationIds.push(a.id)
-      continue
-    }
-
-    const byKey = new Map<string, MarkItem>()
-    for (const a of covering) {
-      const key = itemKey(a)
-      const existing = byKey.get(key)
-      if (existing) {
-        existing.annotationIds.push(a.id)
-      } else {
-        byKey.set(key, {
-          kind: a.kind,
-          authorId: a.authorId,
-          color: a.color,
-          errorType: a.errorType,
-          noteText: a.noteText,
-          annotationIds: [a.id],
-          createdAt: a.createdAt,
-        })
+    const verse = `${word.surah}:${word.ayah}`
+    for (const a of annotations) {
+      if (!a.wordRef || !annotationCoversWord(a, word.id, page)) continue
+      if (a.kind === 'note') {
+        if (!noteVerse.has(a.id)) noteVerse.set(a.id, verse)
+        if (noteVerse.get(a.id) !== verse) continue
       }
+
+      let entry = blocks.get(verse)
+      if (!entry) {
+        entry = { block: { key: verse, surah: word.surah, ayah: word.ayah, words: [], items: [] }, byKey: new Map(), wordIds: new Set() }
+        blocks.set(verse, entry)
+      }
+      if (!entry.wordIds.has(word.id)) {
+        entry.wordIds.add(word.id)
+        entry.block.words.push(word)
+      }
+
+      const key = itemKey(a)
+      let item = entry.byKey.get(key)
+      if (!item) {
+        item = { kind: a.kind, authorId: a.authorId, color: a.color, errorType: a.errorType, noteText: a.noteText, annotationIds: [], words: [], createdAt: a.createdAt }
+        entry.byKey.set(key, item)
+        entry.block.items.push(item)
+      }
+      // A highlight/error is one row per word; a note is one row for its whole range.
+      if (!item.annotationIds.includes(a.id)) item.annotationIds.push(a.id)
+      if (!item.words.some((w) => w.id === word.id)) item.words.push(word)
     }
-    const block: MarkBlock = { key: word.id, words: [word], items: [...byKey.values()] }
-    blocks.push(block)
-    current = { signature, block, byKey }
   }
 
-  return blocks
+  return [...blocks.values()].map((entry) => entry.block)
 }
 
 /**
@@ -223,4 +223,36 @@ export function notesOnPage(page: MushafPageData, annotations: MushafAnnotation[
   return annotations.filter(
     (a) => a.kind === 'note' && (a.wordRef ? wordIds.has(a.wordRef) : versesStartingHere.has(a.verseRef))
   )
+}
+
+export interface VerseOnPage {
+  surah: number
+  ayah: number
+  /** The verse's words on this page, in reading order (its end marker included when it's here). */
+  words: MushafWord[]
+  /** The verse began on the previous page. */
+  startsBefore: boolean
+  /** The verse carries on onto the next page. */
+  continuesAfter: boolean
+}
+
+/**
+ * The whole verse(s) a set of marked words belongs to, as found on this page,
+ * so a summary card can show the marked words in context. A verse running
+ * across two pages is flagged so the card can show it's cut.
+ */
+export function versesOfWords(page: MushafPageData, marked: MushafWord[]): VerseOnPage[] {
+  const all = flattenWords(page)
+  const keys = [...new Set(marked.map((w) => `${w.surah}:${w.ayah}`))]
+  return keys.map((key) => {
+    const [surah, ayah] = key.split(':').map(Number)
+    const words = all.filter((w) => w.surah === surah && w.ayah === ayah)
+    return {
+      surah,
+      ayah,
+      words,
+      startsBefore: !words.some((w) => w.wordIndex === 1),
+      continuesAfter: !words.some((w) => w.isMarker),
+    }
+  })
 }

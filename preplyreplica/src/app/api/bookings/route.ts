@@ -3,10 +3,11 @@ import { z } from 'zod'
 import { createServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server'
 import { getPaymentProvider } from '@/lib/payments'
 import { LESSON_MINUTES, TRIAL, toPence, trialPrice } from '@/lib/pricing'
-import { isRangeFree } from '@/lib/availability'
+import { dateKey, isRangeFree } from '@/lib/availability'
 import { MIN_BOOKING_NOTICE_HOURS } from '@/lib/constants'
 import { emailTeacherNewRequest, loadBookableTeacher } from '@/lib/bookable'
 import { PACKAGE_REQUIRED_MESSAGE } from '@/lib/trialRule'
+import { loadParticipants } from '@/lib/participantNames'
 
 // Strict: unknown fields are rejected rather than ignored.
 const bookingSchema = z
@@ -86,7 +87,8 @@ export async function POST(request: Request) {
   // the picker UI only shows open slots, but never trust that alone: the
   // slot could have been taken by someone else, or blocked, between the
   // student loading the page and submitting this request.
-  const dayKey = startDate.toISOString().slice(0, 10)
+  // The lesson's local date, matching how availability dates are stored (not the UTC date).
+  const dayKey = dateKey(startDate)
   const [{ data: daySlots }, { data: dayExceptions }, { data: dayBookings }] = await Promise.all([
     supabase.from('availability_slots').select('weekday, start_time, end_time').eq('teacher_id', teacherId),
     supabase
@@ -94,7 +96,8 @@ export async function POST(request: Request) {
       .select('exception_date, start_time, end_time, kind')
       .eq('teacher_id', teacherId)
       .eq('exception_date', dayKey),
-    supabase
+    // All of the teacher's bookings, not just this student's (RLS would hide the others).
+    createSupabaseServiceRoleClient()
       .from('bookings')
       .select('start_at, end_at, status')
       .eq('teacher_id', teacherId)
@@ -113,13 +116,14 @@ export async function POST(request: Request) {
   if (packageId) return bookWithPackage(userId, teacherId, packageId, lesson)
 
   // From here on: the trial, the only lesson paid on its own. The student pays
-  // into the teacher's payout account, on whichever provider holds it; the
-  // teacher keeps exactly the trial fee and the platform's share is the
-  // booking fee less the card processing fee (lib/pricing.ts).
+  // My Madrassa; the teacher is paid exactly the trial fee 48 hours after the
+  // lesson, and My Madrassa keeps the booking fee less the real card fee
+  // (recorded at capture). platform_fee is the estimate until then.
   const provider = getPaymentProvider(teacher.payment_provider)
   const pricing = trialPrice(provider.fees)
   const amount = toPence(pricing.studentPays)
   const platformFee = Math.max(0, toPence(pricing.platformNet))
+  const teacherName = (await loadParticipants([teacherId])).get(teacherId)?.name ?? 'your teacher'
 
   const { data: booking, error: bookingError } = await db
     .from('bookings')
@@ -142,13 +146,12 @@ export async function POST(request: Request) {
 
   const { url, checkoutId, paymentId } = await provider.createCheckout({
     amount,
-    platformFee,
     currency: 'gbp',
-    payeeAccountId: teacher.payout_account_id,
     capture: 'manual',
-    description: `${TRIAL.minutes}-minute trial lesson`,
+    description: `${TRIAL.minutes}-minute trial lesson with ${teacherName}`,
     reference: booking.id,
-    successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/bookings`,
+    metadata: { teacher_id: teacherId, kind: 'trial' },
+    successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/student/dashboard?booked=${booking.id}`,
     cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL}/teachers/${teacherId}`,
   })
 
@@ -163,6 +166,7 @@ export async function POST(request: Request) {
     teacher_fee: toPence(pricing.teacherReceives),
     processing_fee_estimate: pricing.processingFee,
     pending_fees_billed: 0,
+    charge_model: 'platform',
     status: 'pending',
   })
 

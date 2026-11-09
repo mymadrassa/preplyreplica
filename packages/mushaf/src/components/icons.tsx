@@ -24,6 +24,8 @@ const PATHS = {
   moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
   search: ['M11 3a8 8 0 1 0 0 16a8 8 0 1 0 0-16', 'm21 21-4.3-4.3'],
   'chevron-left': ['m15 18-6-6 6-6'],
+  'chevron-down': ['m6 9 6 6 6-6'],
+  check: ['M20 6 9 17l-5-5'],
   'chevron-right': ['m9 18 6-6-6-6'],
   // Brain: a memorisation error.
   memorisation: [

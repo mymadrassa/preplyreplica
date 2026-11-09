@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { Avatar } from '@/components/Avatar'
+import { loadParticipants } from '@/lib/participantNames'
 
 export default async function StudentMessagesPage() {
   const supabase = createServerClient()
@@ -17,9 +18,10 @@ export default async function StudentMessagesPage() {
 
   const { data: conversations } = await supabase
     .from('conversations')
-    .select('id, created_at, teacher_profiles(id, profiles(full_name, avatar_url))')
+    .select('id, created_at, teacher_id')
     .eq('student_id', userId)
     .order('created_at', { ascending: false })
+  const people = await loadParticipants((conversations ?? []).map((c) => c.teacher_id))
 
   return (
     <main className="container mx-auto px-4 py-12">
@@ -29,14 +31,15 @@ export default async function StudentMessagesPage() {
       <div className="mt-8 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-card">
         {conversations?.length ? (
           conversations.map((conversation) => {
-            const teacherName = conversation.teacher_profiles?.profiles?.full_name ?? 'Teacher'
+            const teacher = people.get(conversation.teacher_id)
+            const teacherName = teacher?.name ?? 'User'
             return (
               <Link
                 key={conversation.id}
                 href={`/student/messages/${conversation.id}`}
                 className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50"
               >
-                <Avatar name={teacherName} avatarUrl={conversation.teacher_profiles?.profiles?.avatar_url} />
+                <Avatar name={teacherName} avatarUrl={teacher?.avatarUrl} />
                 <span className="font-medium text-slate-900">{teacherName}</span>
               </Link>
             )

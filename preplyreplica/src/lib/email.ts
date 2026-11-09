@@ -176,53 +176,6 @@ export async function sendBookingCancelledEmail({
 }
 
 /** Sent to the student when an admin doesn't confirm a completed session within the review window — refunded automatically instead of paying the teacher out. */
-export async function sendPayoutReviewTimedOutStudentEmail({
-  to,
-  studentName,
-  teacherName,
-  subject,
-  startAt,
-}: {
-  to: string
-  studentName: string
-  teacherName: string
-  subject: string
-  startAt: string
-}) {
-  await sendEmail(
-    to,
-    `You've been refunded: ${subject} with ${teacherName}`,
-    `
-      <p>Hi ${studentName},</p>
-      <p>Your <strong>${subject}</strong> lesson with ${teacherName} on <strong>${formatDateTime(startAt)}</strong> wasn't reviewed by our team in time, so you've been fully refunded.</p>
-    `
-  )
-}
-
-/** Sent to the teacher in the same situation — explains why no payout occurred despite them marking the session complete. */
-export async function sendPayoutReviewTimedOutTeacherEmail({
-  to,
-  teacherName,
-  studentName,
-  subject,
-  startAt,
-}: {
-  to: string
-  teacherName: string
-  studentName: string
-  subject: string
-  startAt: string
-}) {
-  await sendEmail(
-    to,
-    `Payout not released: ${subject} with ${studentName}`,
-    `
-      <p>Hi ${teacherName},</p>
-      <p>Our team didn't confirm your <strong>${subject}</strong> lesson with ${studentName} on <strong>${formatDateTime(startAt)}</strong> in time, so no payout was released and the student has been refunded. We're sorry for the inconvenience — please reach out if you believe this was in error.</p>
-    `
-  )
-}
-
 /** Sent to the teacher the moment an admin approves their profile — the one email tied to the approval-timeline's "admin review" step going green. */
 export async function sendTeacherApprovedEmail({
   to,
@@ -240,34 +193,6 @@ export async function sendTeacherApprovedEmail({
       <p>Hi ${teacherName},</p>
       <p>Congratulations — your profile has been approved and is now visible to students.</p>
       <p><a href="${dashboardUrl}">Go to your dashboard</a></p>
-    `
-  )
-}
-
-/** Sent to admins once a teacher marks a session complete — payout is on hold until an admin also confirms. */
-export async function sendAwaitingAdminReviewEmail({
-  to,
-  teacherName,
-  studentName,
-  subject,
-  startAt,
-  reviewUrl,
-}: {
-  to: string[]
-  teacherName: string
-  studentName: string
-  subject: string
-  startAt: string
-  reviewUrl: string
-}) {
-  if (!to.length) return
-  await sendEmail(
-    to,
-    `Payout awaiting review: ${subject} (${teacherName})`,
-    `
-      <p>${teacherName} marked their <strong>${subject}</strong> lesson with ${studentName} (${formatDateTime(startAt)}) as complete.</p>
-      <p>The teacher's payout is on hold until an admin confirms the session took place.</p>
-      <p><a href="${reviewUrl}">Review and confirm</a></p>
     `
   )
 }
@@ -319,6 +244,7 @@ export async function sendPackagePurchasedEmails({
   price,
   expiresAt,
   bookUrl,
+  receiptUrl,
 }: {
   student: { email: string | null; name: string }
   teacher: { email: string | null; name: string }
@@ -327,6 +253,7 @@ export async function sendPackagePurchasedEmails({
   price: number
   expiresAt: string
   bookUrl: string
+  receiptUrl: string
 }) {
   const until = new Date(expiresAt).toLocaleDateString('en-GB', { dateStyle: 'long' })
   if (student.email) {
@@ -336,7 +263,7 @@ export async function sendPackagePurchasedEmails({
       `
         <p>Assalamu alaykum ${escapeHtml(student.name)},</p>
         <p>Your package of <strong>${lessons} lessons</strong> with ${escapeHtml(teacher.name)} is ready (£${price.toFixed(2)}). Use your lessons by <strong>${until}</strong>; any you haven't used by then are refunded automatically.</p>
-        <p><a href="${bookUrl}">Book your next lesson</a></p>
+        <p><a href="${bookUrl}">Book your next lesson</a> · <a href="${receiptUrl}">Your receipt</a></p>
       `
     )
   }
@@ -346,7 +273,7 @@ export async function sendPackagePurchasedEmails({
       `${student.name} bought ${lessons} lessons with you`,
       `
         <p>Hi ${escapeHtml(teacher.name)},</p>
-        <p>${escapeHtml(student.name)} bought a package of <strong>${lessons} lessons</strong> with you. You're paid for each lesson once it's completed.</p>
+        <p>${escapeHtml(student.name)} bought a package of <strong>${lessons} lessons</strong> with you. You're paid your full rate for each lesson you give, with your monthly payout on the 3rd.</p>
       `
     )
   }
@@ -365,13 +292,13 @@ export async function sendPackageRefundedEmail({ to, studentName, teacherName, l
 }
 
 /** The daily tier review promoted a teacher. */
-export async function sendTierPromotionEmail({ to, teacherName, tierLabel, commissionPercent }: { to: string; teacherName: string; tierLabel: string; commissionPercent: number }) {
+export async function sendTierPromotionEmail({ to, teacherName, tierLabel, rate }: { to: string; teacherName: string; tierLabel: string; rate: number }) {
   await sendEmail(
     to,
     `You've reached ${tierLabel}!`,
     `
       <p>Congratulations ${escapeHtml(teacherName)},</p>
-      <p>You've reached the <strong>${tierLabel}</strong> tier. Our commission on your lessons is now <strong>${commissionPercent}%</strong>, so students pay less for your lessons while you still receive your full rate.</p>
+      <p>You've reached the <strong>${tierLabel}</strong> tier: your rate is now <strong>£${rate.toFixed(2)} per hour</strong>. It applies to new packages your students buy; packages already bought keep their price.</p>
     `
   )
 }
@@ -401,6 +328,76 @@ export async function sendTeacherNotApprovedEmail({ to, teacherName, message, pr
       <div style="white-space:pre-line;border-left:3px solid #f59e0b;padding:8px 12px;background:#fffbeb">${escapeHtml(message)}</div>
       <p>Once it's done, submit your profile again from your Profile page.</p>
       <p><a href="${profileUrl}">Open my profile</a></p>
+    `
+  )
+}
+
+/** A lesson was reported: its payout is held until an admin resolves it. */
+export async function sendLessonReportedEmail({ to, reporterName, reporterRole, otherName, subject, startAt, reason, detail, reviewUrl }: { to: string[]; reporterName: string; reporterRole: 'student' | 'teacher'; otherName: string; subject: string; startAt: string; reason: string; detail: string; reviewUrl: string }) {
+  if (!to.length) return
+  await sendEmail(
+    to,
+    `Lesson reported: ${reason}`,
+    `
+      <p>${escapeHtml(reporterName)} (${reporterRole}) reported a problem with the <strong>${escapeHtml(subject)}</strong> lesson with ${escapeHtml(otherName)} on ${formatDateTime(startAt)}.</p>
+      <p><strong>${escapeHtml(reason)}</strong></p>
+      <blockquote style="border-left:3px solid #cbd5e1;margin:0;padding-left:12px;color:#334155">${escapeHtml(detail).replace(/\n/g, '<br>')}</blockquote>
+      <p>The teacher's payout for this lesson is on hold until you decide.</p>
+      <p><a href="${reviewUrl}">Review the report</a></p>
+    `
+  )
+}
+
+/** Reports still open after a week: the lessons' payouts are still on hold. */
+export async function sendOpenReportsReminderEmail({ to, count, reviewUrl }: { to: string[]; count: number; reviewUrl: string }) {
+  if (!to.length || !count) return
+  await sendEmail(
+    to,
+    `${count} lesson report${count === 1 ? '' : 's'} waiting for more than a week`,
+    `
+      <p>${count} reported lesson${count === 1 ? ' is' : 's are'} still waiting for a decision. Their teachers' payouts stay on hold until then.</p>
+      <p><a href="${reviewUrl}">Review the reports</a></p>
+    `
+  )
+}
+
+/** The monthly payout went out. */
+export async function sendMonthlyPayoutEmail({ to, teacherName, periodLabel, lessons, amount, earningsUrl, statementUrl }: { to: string; teacherName: string; periodLabel: string; lessons: number; amount: number; earningsUrl: string; statementUrl: string }) {
+  await sendEmail(
+    to,
+    `Your earnings for ${periodLabel}: £${amount.toFixed(2)}`,
+    `
+      <p>Assalamu alaykum ${escapeHtml(teacherName)},</p>
+      <p>We've sent <strong>£${amount.toFixed(2)}</strong> to your bank account for ${lessons} lesson${lessons === 1 ? '' : 's'} (${periodLabel}). It usually arrives within a few working days.</p>
+      <p><a href="${statementUrl}">Your statement</a> (every lesson, with each fee) · <a href="${earningsUrl}">Earnings</a></p>
+    `
+  )
+}
+
+/** The monthly payout couldn't be sent; it's retried every day. */
+export async function sendPayoutFailedEmail({ to, teacherName, periodLabel, amount, reason, earningsUrl }: { to: string | string[]; teacherName: string; periodLabel: string; amount: number; reason: string; earningsUrl: string }) {
+  await sendEmail(
+    to,
+    `Payout for ${periodLabel} couldn't be sent`,
+    `
+      <p>The payout of <strong>£${amount.toFixed(2)}</strong> to ${escapeHtml(teacherName)} for ${periodLabel} couldn't be sent:</p>
+      <p style="color:#b91c1c">${escapeHtml(reason)}</p>
+      <p>We'll try again every day. If your bank details need updating, please check your payout account.</p>
+      <p><a href="${earningsUrl}">Open earnings</a></p>
+    `
+  )
+}
+
+/** A trial lesson's pay went out (trials are paid on their own, 48 hours after the lesson). */
+export async function sendTrialPayoutEmail({ to, teacherName, lessonLabel, amount, earningsUrl, statementUrl }: { to: string; teacherName: string; lessonLabel: string; amount: number; earningsUrl: string; statementUrl: string }) {
+  await sendEmail(
+    to,
+    `Trial lesson paid: £${amount.toFixed(2)}`,
+    `
+      <p>Assalamu alaykum ${escapeHtml(teacherName)},</p>
+      <p>We've sent <strong>£${amount.toFixed(2)}</strong> to your bank account for ${escapeHtml(lessonLabel)}. It usually arrives within a few working days.</p>
+      <p>Your other lessons are paid together each month, on the 3rd.</p>
+      <p><a href="${statementUrl}">Your statement</a> · <a href="${earningsUrl}">Earnings</a></p>
     `
   )
 }

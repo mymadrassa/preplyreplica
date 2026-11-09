@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { Avatar } from '@/components/Avatar'
 import { ShieldCheck } from 'lucide-react'
 import { ADMIN_SENDER_NAME, unreadFromAdmin } from '@/lib/support'
+import { loadParticipants } from '@/lib/participantNames'
 
 export default async function TeacherMessagesPage() {
   const supabase = createServerClient()
@@ -18,9 +19,10 @@ export default async function TeacherMessagesPage() {
   }
 
   const [{ data: conversations }, adminUnread] = await Promise.all([
-    supabase.from('conversations').select('id, created_at, profiles!student_id(full_name, avatar_url)').eq('teacher_id', userId).order('created_at', { ascending: false }),
+    supabase.from('conversations').select('id, created_at, student_id').eq('teacher_id', userId).order('created_at', { ascending: false }),
     unreadFromAdmin(userId),
   ])
+  const people = await loadParticipants((conversations ?? []).map((c) => c.student_id))
 
   return (
     <main className="container mx-auto px-4 py-12">
@@ -43,14 +45,15 @@ export default async function TeacherMessagesPage() {
         </Link>
         {conversations?.length ? (
           conversations.map((conversation) => {
-            const studentName = conversation.profiles?.full_name ?? 'Student'
+            const student = people.get(conversation.student_id)
+            const studentName = student?.name ?? 'User'
             return (
               <Link
                 key={conversation.id}
                 href={`/teacher/messages/${conversation.id}`}
                 className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50"
               >
-                <Avatar name={studentName} avatarUrl={conversation.profiles?.avatar_url} />
+                <Avatar name={studentName} avatarUrl={student?.avatarUrl} />
                 <span className="font-medium text-slate-900">{studentName}</span>
               </Link>
             )

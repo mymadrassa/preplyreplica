@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { BookOpenCheck, CalendarPlus, Video, X } from 'lucide-react'
 import { BookingActions } from '@/components/BookingActions'
+import { ReportProblemButton } from '@/components/SessionFeedbackPrompt'
 import { StatusBadge } from '@/components/StatusBadge'
 import { BOOKING_STATUS_LABELS, formatBookingDateTime } from '@/lib/format'
 
@@ -13,21 +14,19 @@ interface BookingDetailModalProps {
   startAt: string
   endAt: string
   status: string
-  teacherConfirmedAt: string | null
   isTrial?: boolean
   onClose: () => void
-  /** Fired (before onClose) when approve/reject/mark-complete succeeds, so the caller can react to which one happened — e.g. keep a just-declined booking visible as "Refused" for the rest of the session. */
-  onActionSuccess?: (action: 'approve' | 'reject' | 'complete') => void
+  /** Fired (before onClose) when approve/reject succeeds, so the caller can react to which one happened — e.g. keep a just-declined booking visible as "Refused" for the rest of the session. */
+  onActionSuccess?: (action: 'approve' | 'reject') => void
 }
 
 /**
  * One place to see everything about a booked session and act on it —
  * replaces separately navigating to /session/[id] to "view" a booking, and
- * unifies what used to be two different small popovers (accept/decline vs.
- * confirm-completed) into a single centered dialog whose action area just
- * adapts to the booking's current status.
+ * gathers accept/decline, joining, homework and reporting a problem into a
+ * single centered dialog whose action area adapts to the booking's status.
  */
-export function BookingDetailModal({ bookingId, subject, studentName, startAt, endAt, status, teacherConfirmedAt, isTrial, onClose, onActionSuccess }: BookingDetailModalProps) {
+export function BookingDetailModal({ bookingId, subject, studentName, startAt, endAt, status, isTrial, onClose, onActionSuccess }: BookingDetailModalProps) {
   const hasEnded = new Date(endAt) <= new Date()
 
   return (
@@ -82,12 +81,16 @@ export function BookingDetailModal({ bookingId, subject, studentName, startAt, e
           </Link>
         ) : null}
 
-        {status === 'pending' || (status === 'confirmed' && hasEnded) ? (
+        {status === 'completed' || (status === 'confirmed' && hasEnded) ? (
+          <div className="flex justify-center">
+            <ReportProblemButton prompt={{ bookingId, role: 'teacher', otherName: studentName, subject, startAt, endAt }} />
+          </div>
+        ) : null}
+
+        {status === 'pending' ? (
           <BookingActions
             bookingId={bookingId}
             status={status}
-            endAt={endAt}
-            teacherConfirmedAt={teacherConfirmedAt}
             onSuccess={(action) => {
               onActionSuccess?.(action)
               onClose()

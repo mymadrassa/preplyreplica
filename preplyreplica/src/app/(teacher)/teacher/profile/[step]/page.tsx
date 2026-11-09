@@ -55,6 +55,7 @@ export default async function TeacherProfilePage({ params }: { params: { step: s
       readiness={state.readiness}
       phone={state.phone}
       gender={state.gender}
+      email={session?.user?.email ?? null}
     />
   )
 }

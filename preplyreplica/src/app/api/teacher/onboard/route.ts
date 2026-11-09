@@ -28,7 +28,6 @@ const onboardSchema = z.object({
   bio: z.string().min(20).max(1000),
   languages: z.string().array().min(1),
   subjects: z.string().array().min(1),
-  hourly_rate: z.coerce.number().min(8),
   video_url: z
     .union([z.string().url(), z.literal('')])
     .optional()
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parseResult.error.message }, { status: 400 })
   }
 
-  const { headline, bio, languages, subjects, hourly_rate, video_url, start_payout_setup } = parseResult.data
+  const { headline, bio, languages, subjects, video_url, start_payout_setup } = parseResult.data
 
   const state = await loadTeacherProfileState(supabase, userId)
   const existing = state?.teacher ?? null
@@ -97,11 +96,11 @@ export async function POST(request: Request) {
   }
 
   // A live (approved) profile stays as students see it: the reviewed fields go
-  // into a pending copy for the admin, while the rate (not reviewed) applies now.
+  // into a pending copy for the admin.
   if (state?.mode === 'review-edit') {
     const { error: liveError } = await supabase
       .from('teacher_profiles')
-      .update({ hourly_rate, payout_account_id: payoutAccountId, updated_at: new Date().toISOString() })
+      .update({ payout_account_id: payoutAccountId, updated_at: new Date().toISOString() })
       .eq('id', userId)
     if (liveError) {
       return NextResponse.json({ error: liveError.message }, { status: 500 })
@@ -126,7 +125,6 @@ export async function POST(request: Request) {
     bio,
     languages,
     subjects,
-    hourly_rate,
     video_url: video_url || null,
     payout_account_id: payoutAccountId,
     // Preserve the existing review status when editing. A brand-new profile

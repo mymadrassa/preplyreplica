@@ -11,7 +11,8 @@ import { SubmitForApprovalButton } from '@/components/SubmitForApprovalButton'
 import { TeacherDetailsForm, type TeacherDetails } from '@/components/TeacherDetailsForm'
 import { PhoneSetting } from '@/components/PhoneSetting'
 import { GENDERS } from '@/lib/gender'
-import type { Tier } from '@/lib/pricing'
+import { PrivateEmail } from '@/components/PrivateEmail'
+import { TIERS, type Tier } from '@/lib/pricing'
 import { diffProfileChanges, type ProfileEditMode, type ReviewedValues } from '@/lib/profileEditing'
 import type { TeacherReadiness } from '@/lib/teacherReadiness'
 import type { TeacherStatus } from '@/lib/loadTeacherReadiness'
@@ -37,6 +38,8 @@ export interface ProfileWizardProps {
   readiness: TeacherReadiness
   phone: string | null
   gender: string | null
+  /** The account's email: shown to the teacher only. */
+  email: string | null
 }
 
 // The teacher's single Profile page. How it behaves follows the edit mode
@@ -44,7 +47,7 @@ export interface ProfileWizardProps {
 // read-mode-with-Edit once live — where edits to what students see wait in a
 // pending copy for review while the approved profile stays live.
 export function ProfileWizard(props: ProfileWizardProps) {
-  const { step, userId, mode, status, details, payoutsConnected, payoutProviderName, tier, live, pending, changesState, reviewNote, documents, readiness, phone, gender } = props
+  const { step, userId, mode, status, details, payoutsConnected, payoutProviderName, tier, live, pending, changesState, reviewNote, documents, readiness, phone, gender, email } = props
   const router = useRouter()
   const index = PROFILE_STEPS.indexOf(step)
   const go = (target: ProfileStep) => router.push(`/teacher/profile/${target}`)
@@ -108,6 +111,7 @@ export function ProfileWizard(props: ProfileWizardProps) {
         <div className="space-y-6">
           <DetailsStep mode={mode} details={details} live={live} pending={pending} tier={tier} />
           <PhoneSetting initial={phone} help="Required. We contact you on WhatsApp about lessons; never shown to students." />
+          <PrivateEmail email={email} />
           {gender ? <GenderNote gender={gender} /> : null}
         </div>
       </WizardShell>
@@ -365,7 +369,7 @@ function DetailsStep({ mode, details, live, pending, tier }: { mode: ProfileEdit
     { label: 'Bio', value: shown.bio || '—', field: 'bio' },
     { label: 'Subjects', value: shown.subjects.join(', ') || '—', field: 'subjects' },
     { label: 'Languages', value: shown.languages.join(', ') || '—', field: 'languages' },
-    { label: 'Hourly rate', value: details.hourly_rate != null ? `£${details.hourly_rate}` : '—' },
+    { label: 'Your rate', value: `£${TIERS[tier].rate.toFixed(2)}/hour (${TIERS[tier].label} tier, rises with promotions)` },
     { label: 'Intro video', value: shown.video_url ? 'Added' : 'None', field: 'video_url' },
   ]
 

@@ -1,5 +1,5 @@
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server'
-import { getPaymentProvider } from '@/lib/payments'
+import { paymentRefFor } from '@/lib/payments'
 import { sendPackageRefundedEmail } from '@/lib/email'
 import { toPounds } from '@/lib/pricing'
 import type { Database } from '@/types/database'
@@ -13,7 +13,7 @@ export function lessonsLeft(pkg: Pick<PackageRow, 'lessons_total' | 'lessons_use
 
 /**
  * Ends a package and refunds its unused lessons at the discounted per-lesson
- * price, through the provider that took the payment. Used when the student
+ * price, on the account that took the payment. Used when the student
  * cancels it and when it expires.
  */
 export async function closePackageWithRefund(pkg: PackageRow, reason: 'cancelled' | 'expired'): Promise<{ refunded: number } | { error: string }> {
@@ -23,9 +23,10 @@ export async function closePackageWithRefund(pkg: PackageRow, reason: 'cancelled
 
   if (amount > 0) {
     const { data: teacher } = await supabase.from('teacher_profiles').select('payout_account_id').eq('id', pkg.teacher_id).single()
-    if (!pkg.provider_payment_id || !teacher?.payout_account_id) return { error: 'The package payment can’t be found.' }
+    const charge = paymentRefFor(pkg, teacher)
+    if (!charge) return { error: 'The package payment can’t be found.' }
     try {
-      await getPaymentProvider(pkg.provider).refundPayment({ paymentId: pkg.provider_payment_id, payeeAccountId: teacher.payout_account_id }, { amount })
+      await charge.provider.refundPayment(charge.ref, { amount })
     } catch (error) {
       return { error: (error as Error)?.message || 'Refund failed' }
     }

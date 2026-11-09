@@ -34,6 +34,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'We couldn’t send the email right now. Please try again in a few minutes.' }, { status: 502 })
     }
   }
-  // No account (or any other lookup error): same answer, nothing sent.
+  // No account (or any other lookup error): same answer to the visitor, nothing sent.
+  // The server log says which case it was, for whoever runs the site.
+  if (error || !tokenHash) {
+    console.warn(`[forgot-password] no email sent to ${email}: ${error?.message ?? 'no reset link returned'} (an address without an account ends up here)`)
+  } else {
+    console.info(`[forgot-password] reset email sent to ${email}`)
+  }
   return NextResponse.json({ ok: true })
 }

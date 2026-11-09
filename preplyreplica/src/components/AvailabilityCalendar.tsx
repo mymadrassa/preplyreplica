@@ -13,7 +13,7 @@ type Slot = AvailabilitySlot
 // an existing exception — the 'booking' mode's data source (the public
 // availability API) omits it.
 type Exception = AvailabilityException & { id?: string }
-// `id`/`subject`/`profiles`/`teacher_confirmed_at` are only present (and only
+// `id`/`subject`/`profiles` are only present (and only
 // rendered) in 'owner' mode — the 'booking' mode's data source (the public
 // availability API) deliberately omits them, since a student browsing a
 // teacher's calendar shouldn't see who else booked what.
@@ -21,7 +21,6 @@ type Booking = OccupyingBooking & {
   id?: string
   subject?: string
   profiles?: { full_name: string | null; email: string | null } | null
-  teacher_confirmed_at?: string | null
   is_trial?: boolean
 }
 
@@ -516,10 +515,8 @@ export function AvailabilityCalendar({
                         tooltip = `${booking.subject} with ${studentName} — payment still processing`
                       } else if (booking.status === 'confirmed' && end <= now) {
                         colorClass = 'border-2 border-dashed border-indigo-400 bg-indigo-100 text-indigo-900 hover:bg-indigo-200'
-                        label = `${booking.teacher_confirmed_at ? 'Awaiting payout' : 'Confirm completed'} · ${booking.subject} · ${studentName}`
-                        tooltip = booking.teacher_confirmed_at
-                          ? `${booking.subject} with ${studentName} — awaiting admin confirmation for payout`
-                          : `Session ended: ${booking.subject} with ${studentName} — click to confirm it happened`
+                        label = `Given · ${booking.subject} · ${studentName}`
+                        tooltip = `Lesson given: ${booking.subject} with ${studentName} — click for homework, or to report a problem`
                       } else if (booking.status === 'rejected') {
                         // Just declined this session — the real data no longer
                         // holds this slot (a student could already rebook it),
@@ -647,7 +644,6 @@ export function AvailabilityCalendar({
           startAt={selectedBooking.start_at}
           endAt={selectedBooking.end_at}
           status={selectedBooking.status}
-          teacherConfirmedAt={selectedBooking.teacher_confirmed_at ?? null}
           isTrial={selectedBooking.is_trial}
           onClose={() => setSelectedBooking(null)}
           onActionSuccess={(action) => {

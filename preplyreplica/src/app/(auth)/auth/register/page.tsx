@@ -31,6 +31,8 @@ function RegisterForm() {
   // form would just be re-asking a question already answered.
   const role = searchParams.get('role') === 'teacher' ? 'teacher' : 'student'
   const { showToast } = useToast()
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [phone, setPhone] = useState('')
@@ -40,6 +42,7 @@ function RegisterForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!firstName.trim() || !lastName.trim()) return showToast('error', 'Enter your first and last name.')
     if (!normalizePhone(phone)) return showToast('error', phoneProblem(phone) ?? PHONE_HINT)
     if (password.length < MIN_PASSWORD_LENGTH) return showToast('error', `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
     if (!gender) return showToast('error', 'Tell us whether you are male or female.')
@@ -48,7 +51,7 @@ function RegisterForm() {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, role, phone, gender }),
+      body: JSON.stringify({ firstName, lastName, email, password, role, phone, gender }),
     })
     const data = await response.json()
 
@@ -84,6 +87,10 @@ function RegisterForm() {
         </p>
       </div>
       <form onSubmit={handleSubmit} className="mt-10 grid gap-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="First name" name="firstName" autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} maxLength={60} required />
+          <Input label="Last name" name="lastName" autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} maxLength={60} required />
+        </div>
         <Input label="Email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <PhoneInput value={phone} onChange={setPhone} help={role === 'teacher' ? 'Private: we contact you on WhatsApp about lessons. Never shown to students.' : 'Your homework is sent to it on WhatsApp. Never shown to your teachers.'} />
         <PasswordInput label="Password" name="password" value={password} onChange={(event) => setPassword(event.target.value)} minChars={MIN_PASSWORD_LENGTH} autoComplete="new-password" required />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getTotalPages } from '../data'
 import { Icon } from './icons'
+import { juzForPage } from '../juz'
 
 interface PageNavProps {
   currentPage: number
@@ -51,6 +52,7 @@ export function PageNav({ currentPage, canNavigate, detached = false, onChange }
           className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-center text-slate-900 disabled:bg-slate-50"
         />
         <span>/ {totalPages}</span>
+        <span className="text-xs text-slate-400">· Juz' {juzForPage(currentPage)}</span>
         {!canNavigate ? <span className="text-xs text-slate-400">{detached ? '· browsing on your own' : '· following your teacher'}</span> : null}
       </form>
       <button type="button" title="Previous page" aria-label="Previous page" className={buttonClass} disabled={!canNavigate || currentPage <= 1} onClick={() => onChange(currentPage - 1)}>

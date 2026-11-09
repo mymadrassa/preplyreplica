@@ -9,6 +9,9 @@ const ERROR_CLASSES: Record<ErrorType, string> = {
   hesitation: 'underline decoration-dotted decoration-slate-600 decoration-2 underline-offset-[0.35em]',
 }
 
+const ERROR_PRIORITY: ErrorType[] = ['memorisation', 'tajwid', 'hesitation']
+const ERROR_NAMES: Record<ErrorType, string> = { memorisation: 'Memorisation error', tajwid: 'Tajwid error', hesitation: 'Hesitation' }
+
 interface MushafWordProps {
   word: MushafWordData
   /** Marks that apply to this word (its own marks plus range notes covering it). */
@@ -25,7 +28,10 @@ interface MushafWordProps {
 
 export function MushafWord({ word, annotations, selected, showNoteIcon = false, mode, dark = false, onSelect }: MushafWordProps) {
   const highlight = annotations.find((a) => a.kind === 'highlight' && a.color)
-  const error = annotations.find((a) => a.kind === 'error' && a.errorType)
+  const errors = annotations.filter((a) => a.kind === 'error' && a.errorType)
+  // Several errors on one word: the underline shows the most serious, the tooltip names them all.
+  const error = ERROR_PRIORITY.map((type) => errors.find((a) => a.errorType === type)).find(Boolean)
+  const errorNames = [...new Set(errors.map((a) => ERROR_NAMES[a.errorType!]))]
   const glyph = mode === 'qcf' && word.glyph
 
   const classes = [
@@ -43,6 +49,7 @@ export function MushafWord({ word, annotations, selected, showNoteIcon = false, 
       role="button"
       tabIndex={0}
       data-word-id={word.id}
+      title={errorNames.length ? errorNames.join(' · ') : undefined}
       className={classes}
       style={glyph ? { fontFamily: `${qcfFamily(word.fontPage ?? 1)}, "Amiri Quran", serif` } : undefined}
       onClick={(e) => onSelect(word, e.currentTarget)}

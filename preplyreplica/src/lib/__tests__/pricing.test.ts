@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lessonPrice, packagePrice, toPence, toPounds, trialPrice } from '../pricing'
+import { lessonPrice, packagePrice, tierRate, toPence, toPounds, trialPrice } from '../pricing'
 
 // Every expectation below is a figure from Pricing_Model_GBP.pdf.
 
@@ -9,12 +9,12 @@ describe('lessonPrice', () => {
     ['mid', 17.5, { commission: 6.13, studentPays: 25.63, processingFee: 0.58, platformNet: 7.55 }],
     ['top', 20, { commission: 6, studentPays: 28, processingFee: 0.62, platformNet: 7.38 }],
   ] as const)('prices a one-hour %s lesson', (tier, rate, expected) => {
-    const price = lessonPrice(rate, tier)
+    const price = lessonPrice(tier)
     expect(price).toMatchObject({ teacherReceives: rate, bookingFee: 2, ...expected })
   })
 
-  it('always pays the teacher their full rate', () => {
-    expect(lessonPrice(12, 'starter').teacherReceives).toBe(12)
+  it('pays the teacher the full rate of their tier', () => {
+    expect([tierRate('starter'), tierRate('mid'), tierRate('top')]).toEqual([15, 17.5, 20])
   })
 })
 
@@ -30,11 +30,11 @@ describe('packagePrice', () => {
     ['mid', 17.5, { normalPrice: 256.25, price: 230.63, processingFee: 3.66, platformNet: 51.97 }],
     ['top', 20, { normalPrice: 280, price: 252, processingFee: 3.98, platformNet: 48.02 }],
   ] as const)('prices a 10-lesson %s package at 10%% off', (tier, rate, expected) => {
-    expect(packagePrice(rate, tier)).toMatchObject({ lessons: 10, teacherPerLesson: rate, ...expected })
+    expect(packagePrice(tier)).toMatchObject({ lessons: 10, teacherPerLesson: rate, ...expected })
   })
 
   it('refunds an unused lesson at the discounted per-lesson price', () => {
-    expect(packagePrice(15, 'starter').perLesson).toBe(20.7)
+    expect(packagePrice('starter').perLesson).toBe(20.7)
   })
 })
 

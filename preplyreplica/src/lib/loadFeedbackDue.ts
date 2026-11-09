@@ -25,6 +25,7 @@ function toPrompt(booking: BookingForPrompt, role: FeedbackRole): FeedbackPrompt
     otherName: (role === 'student' ? booking.teacher_profiles?.profiles?.full_name : booking.profiles?.full_name) || (role === 'student' ? 'your teacher' : 'your student'),
     subject: booking.subject,
     startAt: booking.start_at,
+    endAt: booking.end_at,
   }
 }
 

@@ -15,6 +15,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const notifications: AppNotification[] = []
   let feedbackPrompt: FeedbackPromptData | null = null
   let needsGender = false
+  let needsName = false
   if (session?.user?.id) {
     const [{ data: profile }, { data: unseen }, due, { data: feedback }] = await Promise.all([
       supabase.from('profiles').select('full_name, email, avatar_url, phone, gender').eq('id', session.user.id).single(),
@@ -39,6 +40,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     userName = profile?.full_name || profile?.email?.split('@')[0] || null
     avatarUrl = profile?.avatar_url ?? null
     needsGender = !!profile && !profile.gender
+    needsName = !!profile && !profile.full_name?.trim()
 
     if (profile && !profile.phone) {
       notifications.push({
@@ -68,7 +70,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   }
 
   return (
-    <AppShell role="student" dashboardHref="/student/dashboard" userName={userName} avatarUrl={avatarUrl} notifications={notifications} notificationsHeading="Notifications" feedbackPrompt={feedbackPrompt} needsGender={needsGender}>
+    <AppShell role="student" dashboardHref="/student/dashboard" userName={userName} avatarUrl={avatarUrl} notifications={notifications} notificationsHeading="Notifications" feedbackPrompt={feedbackPrompt} needsGender={needsGender} needsName={needsName}>
       {children}
     </AppShell>
   )

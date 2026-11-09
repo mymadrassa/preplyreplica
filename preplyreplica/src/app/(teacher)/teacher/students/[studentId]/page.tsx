@@ -10,6 +10,9 @@ import { RatingStars } from '@/components/RatingStars'
 import { FeedbackTags } from '@/components/FeedbackTags'
 import { GiveFeedbackButton } from '@/components/SessionFeedbackPrompt'
 import { MarkFeedbackSeen } from '@/components/MarkFeedbackSeen'
+import { CriteriaAverages } from '@/components/CriteriaAverages'
+import { describeCriteria } from '@/lib/sessionFeedback'
+import { formatPageRanges, pagesByBooking } from '@/lib/lessonPages'
 
 export default async function StudentFollowUpPage({ params }: { params: { studentId: string } }) {
   const supabase = createServerClient()
@@ -23,7 +26,7 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
     supabase.from('profiles').select('full_name, email, avatar_url').eq('id', params.studentId).maybeSingle(),
     supabase
       .from('bookings')
-      .select('id, start_at, subject, status')
+      .select('id, start_at, end_at, subject, status')
       .eq('teacher_id', userId)
       .eq('student_id', params.studentId)
       .in('status', ['confirmed', 'completed'])
@@ -33,7 +36,7 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
     supabase.from('conversations').select('id').eq('teacher_id', userId).eq('student_id', params.studentId).maybeSingle(),
     supabase
       .from('session_feedback')
-      .select('booking_id, author_id, status, rating, comment, visibility, tags, recipient_seen_at')
+      .select('booking_id, author_id, status, rating, comment, visibility, tags, criteria, outcome, recipient_seen_at')
       .or(`and(author_id.eq.${userId},recipient_id.eq.${params.studentId}),and(author_id.eq.${params.studentId},recipient_id.eq.${userId})`),
   ])
   // Only students this teacher actually teaches.
@@ -43,6 +46,8 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
   const summary = summarizeFollowUp(bookings, homeworkRows ?? [])
   const byBooking = new Map(items.map((item) => [item.bookingId, item]))
   const now = new Date()
+  const { data: pageRows } = await supabase.from('lesson_pages').select('booking_id, page').in('booking_id', bookings.map((b) => b.id))
+  const lessonPages = pagesByBooking(pageRows ?? [])
   const fromStudent = new Map((feedbackRows ?? []).filter((f) => f.author_id === params.studentId && f.status === 'given').map((f) => [f.booking_id, f]))
   const mine = new Map((feedbackRows ?? []).filter((f) => f.author_id === userId).map((f) => [f.booking_id, f]))
   const hasUnseenFeedback = [...fromStudent.values()].some((f) => !f.recipient_seen_at)
@@ -90,6 +95,10 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
         ))}
       </dl>
 
+      <div className="mt-6">
+        <CriteriaAverages role="teacher" title="Your ratings" scores={[...mine.values()].filter((f) => f.status === 'given' && f.outcome === 'ok').map((f) => f.criteria)} />
+      </div>
+
       <h2 className="mt-10 text-lg font-semibold text-slate-900">Lessons</h2>
       <ol className="mt-4 space-y-3">
         {bookings.map((booking) => {
@@ -101,6 +110,9 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
                 <p className="text-sm font-medium text-slate-900">
                   {new Date(booking.start_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
                   <span className="ml-2 font-normal text-slate-500">{booking.subject}</span>
+                  {lessonPages.get(booking.id)?.length ? (
+                    <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-600">{formatPageRanges(lessonPages.get(booking.id)!)}</span>
+                  ) : null}
                 </p>
                 <div className="flex items-center gap-3">
                   {item ? (
@@ -138,7 +150,7 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
                 <LessonFeedback
                   student={fromStudent.get(booking.id) ?? null}
                   mine={mine.get(booking.id) ?? null}
-                  prompt={{ bookingId: booking.id, role: 'teacher', otherName: name, subject: booking.subject, startAt: booking.start_at }}
+                  prompt={{ bookingId: booking.id, role: 'teacher', otherName: name, subject: booking.subject, startAt: booking.start_at, endAt: booking.end_at }}
                 />
               ) : null}
             </li>
@@ -149,7 +161,7 @@ export default async function StudentFollowUpPage({ params }: { params: { studen
   )
 }
 
-type FeedbackRow = { rating: number | null; comment: string | null; visibility: 'public' | 'private' | null; tags: string[]; status: 'given' | 'skipped' }
+type FeedbackRow = { rating: number | null; comment: string | null; visibility: 'public' | 'private' | null; tags: string[]; criteria: Record<string, number>; outcome: 'ok' | 'reported'; status: 'given' | 'skipped' }
 
 /** Both sides' feedback on one lesson: the student's (stars, comment, visibility) and the teacher's own tags. */
 function LessonFeedback({ student, mine, prompt }: { student: FeedbackRow | null; mine: FeedbackRow | null; prompt: React.ComponentProps<typeof GiveFeedbackButton>['prompt'] }) {
@@ -171,7 +183,22 @@ function LessonFeedback({ student, mine, prompt }: { student: FeedbackRow | null
       </div>
       <div className="text-right">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Your feedback</p>
-        {mine?.status === 'given' ? <FeedbackTags tags={mine.tags} className="mt-1 justify-end" /> : <GiveFeedbackButton prompt={prompt} className="mt-1" />}
+        {mine?.status === 'given' ? (
+          mine.outcome === 'reported' ? (
+            <p className="mt-1 text-amber-700">Problem reported</p>
+          ) : (
+            <>
+              <p className="mt-1 text-xs text-slate-500">
+                {describeCriteria('teacher', mine.criteria)
+                  .map((c) => `${c.label.split(' (')[0]} ${c.score}/5`)
+                  .join(' · ')}
+              </p>
+              <FeedbackTags tags={mine.tags} className="mt-1 justify-end" />
+            </>
+          )
+        ) : (
+          <GiveFeedbackButton prompt={prompt} className="mt-1" />
+        )}
       </div>
     </div>
   )

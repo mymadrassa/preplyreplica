@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { ChatThread } from '@/components/chat/ChatThread'
+import { loadParticipants } from '@/lib/participantNames'
 
 export default async function StudentConversationPage({ params }: { params: { conversationId: string } }) {
   const supabase = createServerClient()
@@ -19,7 +20,7 @@ export default async function StudentConversationPage({ params }: { params: { co
 
   const { data: conversation } = await supabase
     .from('conversations')
-    .select('id, student_id, teacher_profiles(id, profiles(full_name))')
+    .select('id, student_id, teacher_id')
     .eq('id', params.conversationId)
     .single()
 
@@ -33,7 +34,7 @@ export default async function StudentConversationPage({ params }: { params: { co
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back to messages
       </Link>
-      <ChatThread target={{ kind: 'conversation', id: conversation.id }} currentUserId={userId} otherPartyName={conversation.teacher_profiles?.profiles?.full_name ?? 'Teacher'} />
+      <ChatThread target={{ kind: 'conversation', id: conversation.id }} currentUserId={userId} headerLink={{ href: `/teachers/${conversation.teacher_id}`, label: 'Go to profile' }} otherPartyName={(await loadParticipants([conversation.teacher_id])).get(conversation.teacher_id)?.name ?? 'User'} />
     </main>
   )
 }

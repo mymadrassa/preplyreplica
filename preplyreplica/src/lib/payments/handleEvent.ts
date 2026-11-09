@@ -7,6 +7,9 @@ import { emailTeacherNewRequest } from '@/lib/bookable'
 import { sendPackagePurchasedEmails } from '@/lib/email'
 import { PACKAGE, toPounds } from '@/lib/pricing'
 import type { PaymentEvent, PaymentProviderId } from './types'
+import { getPaymentProvider } from './index'
+import { recordPackagePaymentFees } from '@/lib/paymentFees'
+import { appUrl } from '@/lib/appUrl'
 
 type Tables = Database['public']['Tables']
 type PaymentRow = Tables['payments']['Row']
@@ -37,6 +40,8 @@ export async function handlePaymentEvent(event: PaymentEvent, providerId: Paymen
     case 'checkout.completed': {
       const { data: payment } = await findPayment('provider_checkout_id', event.checkoutId)
       if (!payment) return activatePackage(providerId, event.checkoutId, event.paymentId)
+      // Already recorded (the webhook and the return from checkout can both report it).
+      if (payment.status !== 'pending') return
       const { data: booking } = await supabase.from('bookings').select('teacher_id').eq('id', payment.booking_id).single()
 
       // Authorized, not charged yet: the booking now waits on the teacher's approval.
@@ -99,8 +104,11 @@ async function activatePackage(providerId: PaymentProviderId, checkoutId: string
       status: 'active',
       expires_at: expiresAt.toISOString(),
       provider_payment_id: pkg.provider_payment_id ?? paymentId,
+      paid_at: new Date().toISOString(),
     })
     .eq('id', pkg.id)
+  // The real card fee, for the receipt.
+  await recordPackagePaymentFees(pkg.id, supabase)
 
   const [{ data: student }, { data: teacher }] = await Promise.all([
     supabase.from('profiles').select('full_name, email').eq('id', pkg.student_id).single(),
@@ -119,5 +127,25 @@ async function activatePackage(providerId: PaymentProviderId, checkoutId: string
     price: toPounds(pkg.price),
     expiresAt: expiresAt.toISOString(),
     bookUrl: `${process.env.NEXT_PUBLIC_APP_URL}/teachers/${pkg.teacher_id}`,
+    receiptUrl: appUrl(`/receipts/package/${pkg.id}`),
   })
+}
+
+/**
+ * Settles a checkout straight away when the student comes back from it,
+ * instead of waiting for the provider's webhook (which can arrive late, and
+ * never reaches a local development server). Safe to repeat: events that
+ * were already handled change nothing.
+ */
+export async function syncCheckout(input: { providerId: string; checkoutId: string | null; payeeAccountId: string | null }) {
+  // payeeAccountId: null for checkouts on My Madrassa's account, the teacher's for older direct charges.
+  if (!input.checkoutId) return
+  try {
+    const provider = getPaymentProvider(input.providerId)
+    for (const event of await provider.getCheckoutEvents(input.checkoutId, input.payeeAccountId)) {
+      await handlePaymentEvent(event, provider.id)
+    }
+  } catch {
+    // Provider unreachable: the webhook will catch up.
+  }
 }
